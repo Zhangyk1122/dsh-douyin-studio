@@ -626,6 +626,9 @@ window.__ModuleLoader__.load({
       /* 谷时：这些动作每步都过模型，白天跑等于按原价买流程。空着 = 不限制。 */
       { k: 'activeFrom', label: '谷时从', ph: '00:30' },
       { k: 'activeTo', label: '谷时到', ph: '08:30' },
+      /* 这两个以前只在插件 config 里，改完还得重启；现在存了就把定时器重开一遍 */
+      { k: 'dutyEveryMin', label: '回评论隔几分钟看一次', ph: '30' },
+      { k: 'watchEverySec', label: '盯私信隔几秒看一次', ph: '90' },
       { g: '说话' },
       { k: 'persona', label: '人设（你谁）', ph: '留空 = 通用口吻' },
       { k: 'botName', label: '自称（日报标题）', ph: '留空 = 「日报」' },
@@ -652,7 +655,7 @@ window.__ModuleLoader__.load({
         setBusy(true); setNote('')
         try {
           const r = await jpost('/settings', { settings: v })
-          if (r && r.ok) { setNote('已保存 · 下一轮刷视频 / 值班就按这个来'); onSaved && onSaved(r.settings) }
+          if (r && r.ok) { setNote('已保存 · 立刻生效（定时器按新值重开了）'); onSaved && onSaved(r.settings) }
           else setNote('没存上：' + ((r && r.error) || '未知原因'))
         } catch (e) { setNote('没存上：' + String((e && e.message) || e)) }
         finally { setBusy(false) }
@@ -665,7 +668,7 @@ window.__ModuleLoader__.load({
         setNote('存着呢…')
         try {
           const r = await jpost('/settings', { patch: { [k]: val } })
-          setNote(r && r.ok ? '已保存' : '没存上：' + ((r && r.error) || ''))
+          setNote(r && r.ok ? '已保存 · 立刻生效' : '没存上：' + ((r && r.error) || ''))
           if (r && r.ok) onSaved && onSaved(r.settings)
         } catch (e) { setNote('没存上：' + String((e && e.message) || e)) }
       }

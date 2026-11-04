@@ -499,7 +499,23 @@ export function apply(ctx, config) {
 							? { ...readSettings(), ...body.patch }
 							: (body && body.settings ? body.settings : body)
 						const r = writeSettings(full)
-						return sendJson(res, r.ok ? 200 : 500, r)
+						/* 存完就按新值把定时器重开一遍 —— 这样面板改时长/间隔，不用重启 DSH。
+						 * 关着的（值班没启动过）不硬拉起来，免得改了个数字把机器人唤醒了。 */
+						if (r.ok) {
+							const n = readSettings()
+							try {
+								const ds = DUTY.status()
+								if (ds && ds.running) {
+									DUTY.start({ everyMin: n.dutyEveryMin || S.dutyEveryMin, autoReply: n.autoComment || S.dutyAutoReply, maxPerRun: 2 })
+								}
+							} catch { /* 值班重开失败不该让保存失败 */ }
+							try {
+								const ws = WATCH.status()
+								if (ws && ws.running) WATCH.start({ everySec: n.watchEverySec || S.watchEverySec, quiet: true, startDelaySec: 0 })
+							} catch { /* 同上 */ }
+							AUTOPILOT.configure({ runCli: run })
+						}
+						return sendJson(res, r.ok ? 200 : 500, { ...r, live: r.ok, hint: r.ok ? '已保存，定时器按新值重开了' : '' })
 					}
 
 					/* ── 在「机器人的浏览器」里打开（不是系统默认浏览器） ─────────
