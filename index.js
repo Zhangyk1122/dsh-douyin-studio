@@ -218,6 +218,26 @@ export function apply(ctx, config) {
 	/* ── 候选库：同一时刻只跑一轮，跑完写盘 ──────────────────────────────
 	 * 为什么放后台：一轮要真浏览器 + 几轮刷，十几秒到几分钟。请求里等它 = 面板卡住。
 	 * 和 /inbox 的一条规矩：**慢的东西不许在请求路径上 await**。 */
+	/* ── 口味画像：每次刷完重算一遍 ──────────────────────────────────────
+	 * 纯读本地记录（发布日志 / 回评账本 / 候选库），几百条，几十毫秒，不起浏览器。
+	 * 样本不够（< 20 条）时 buildTaste 会返回空结构 —— 那就退回"只讲关键词"，
+	 * 不许拿三五条数据编出一个口味来。 */
+	const tasteNow = async () => {
+		try {
+			const { buildTaste, toContext } = await import('./lib/taste.mjs')
+			const { recent } = await import('./lib/publishes.mjs')
+			const { readLedger } = await import('./lib/ledger.mjs')
+			const picksLib = await import('./lib/picks.mjs')
+			const t = buildTaste({
+				publishes: recent(50).rows,
+				ledger: (readLedger().replies || []),
+				picks: picksLib.load().items || [],
+			})
+			return { ...toContext(t), evidence: t.evidence }
+		} catch {
+			return { authors: [], tags: [], evidence: 0 }
+		}
+	}
 	let picksTask = null
 	const startPicksCollect = () => {
 		if (picksTask) return picksTask
@@ -234,12 +254,13 @@ export function apply(ctx, config) {
 				], { timeout: 300000 })
 				if (!r || !r.ok) return r
 				const { toCandidate, judge, mergeItems, load, save } = await import('./lib/picks.mjs')
+				const taste = await tasteNow()
 				const ctx = {
 					keywords: csv(st.keywords), blockKeywords: csv(st.blockKeywords),
 					minSec: st.minSec, maxSec: st.maxSec, minDigg: st.minDigg,
-					/* 作者 / 话题的重合度要等口味画像（lib/taste.mjs）——
-					 * 现在传空数组：宁可只讲"命中关键词"，也不假装认识你。 */
-					authors: [], tags: [],
+					/* 作者 / 话题的重合度来自口味画像；样本不够时这两个是空数组，
+					 * judge 就只讲"命中关键词"——宁可说得少，也不假装认识你。 */
+					authors: taste.authors, tags: taste.tags,
 				}
 				const cand = []
 				for (const it of r.items || []) {
