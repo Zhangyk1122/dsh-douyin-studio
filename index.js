@@ -246,7 +246,6 @@ export function apply(ctx, config) {
 	const tellOwner = async (cand, st) => {
 		if (!Array.isArray(cand) || !cand.length) return { ok: true, sent: false, why: '这轮没有候选' }
 		if (!st.ownerNick) return { ok: true, sent: false, why: '没填主人昵称，不敢乱叫' }
-		const top = [...cand].sort((a, b) => (b.score || 0) - (a.score || 0))[0]
 		const { isQuiet } = await import('./lib/toast.mjs')
 		const { dayKey } = await import('./lib/schedule.mjs')
 		const hhmm = (v) => {
@@ -265,6 +264,14 @@ export function apply(ctx, config) {
 		if (st.notifyQuiet && isQuiet(new Date(), { from: hhmm(st.quietFrom), to: hhmm(st.quietTo) })) {
 			return { ok: true, sent: false, why: '静音时段，先不吵你' }
 		}
+		/* 今天已经「叫过」的那条别再叫。
+		 * 分数最高的候选会在一天里的**每一轮**都排第一，不记一笔的话，
+		 * 同一条视频能一天发你两次、@ 你两次 —— 和 11-04 那晚连发 13 条私信是同一个病：
+		 * 发完没落账，下一轮又以为「还没发」。 */
+		const already = prev.day === today && Array.isArray(prev.sent) ? prev.sent.map(String) : []
+		const fresh = cand.filter((c) => !already.includes(String(c.aweme_id)))
+		if (!fresh.length) return { ok: true, sent: false, why: '这轮候选今天都给你发过了' }
+		const top = [...fresh].sort((a, b) => (b.score || 0) - (a.score || 0))[0]
 		/* 还有额度的那条路才走；私信优先（更直接），私信满了才轮到评论区。 */
 		const shareLeft = Math.max(0, Number(st.sharePerDay) || 0) - used.share
 		const atLeft = Math.max(0, Number(st.atPerDay) || 0) - used.at
@@ -298,7 +305,9 @@ export function apply(ctx, config) {
 		const sent = Boolean(r && r.ok)
 		if (sent) {
 			const next = { day: today, share: used.share + (tier === 'dm' ? 1 : 0), at: used.at + (tier === 'at' ? 1 : 0),
-				aweme: top.aweme_id, tier, notifiedAt: new Date().toISOString() }
+				aweme: top.aweme_id, tier, notifiedAt: new Date().toISOString(),
+				/* 落账：今天发过哪几条。少了这一行，下一轮又挑同一条（分最高的那条永远是它）。 */
+				sent: [...already, String(top.aweme_id)].slice(-20) }
 			atomicWriteJson(file, next)
 		}
 		return { ok: true, sent, tier, aweme: top.aweme_id, say,
@@ -540,6 +549,11 @@ export function apply(ctx, config) {
 						/* 发我 = 把视频卡片分享到你自己的会话里。**撤不回来**，所以双确认，
 						 * 和 /dm/send 同一个标准；也走同一个 dm 额度池。 */
 						if (act === 'sent') {
+							/* 已经发过的别再发第二遍：列表里它还留着（方便你回看），
+							 * 但按钮再点一次就是一条重复私信，白烧额度。 */
+							if (one.state === 'sent') {
+								return sendJson(res, 200, { ok: false, stage: 'state', error: '这条已经发给你了' })
+							}
 							const nick = String(readSettings().ownerNick || '').trim()
 							if (!nick) return sendJson(res, 200, { ok: false, stage: 'settings', error: '还没填主人昵称（设置 › 主人）' })
 							if (body.confirm !== true) {

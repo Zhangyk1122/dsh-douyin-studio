@@ -172,3 +172,12 @@ test('stats 数得清：总数 / 新的 / 今天叫过 / 存下的', () => {
 test('MAX 是个合理的数（不是 0 也不是无穷）', () => {
 	assert.ok(MAX >= 100 && MAX <= 1000)
 })
+
+test('feed 的 create_date 是 UTC 且没时区标记 —— 不能按本地时间解析', () => {
+	/* 30 小时前的视频：按 UTC 认 → 新鲜度 0.82（过线，理由是「刚发不久」）；
+	 * 按本地时间认会变成 38 小时 → 0.77（没过线，理由退成「平台在推的」）。
+	 * 东八区正好差这 8 小时，所以这条能钉住解析口径。 */
+	const iso = new Date(Date.now() - 30 * 3600 * 1000).toISOString().slice(0, 19).replace('T', ' ')
+	const r = judge(c({ create_date: iso, desc: '无关内容', tags: [], author: '路人', digg: 0 }), { minSec: 0, maxSec: 0 })
+	assert.match(r.why, /刚发不久/)
+})
