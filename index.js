@@ -918,7 +918,9 @@ export function apply(ctx, config) {
 			const { dayKey, dueAt } = await import('./lib/schedule.mjs')
 			const today = dayKey(new Date())
 			if (scan.day !== today) { scan.day = today; scan.done = 0 }
-			const d = dueAt(new Date(), { rounds: st.scanRounds, from: st.scanFrom, to: st.scanTo }, scan.done)
+			const d = dueAt(new Date(), {
+				rounds: st.scanRounds, from: st.scanFrom, to: st.scanTo, everyMin: st.scanEveryMin,
+			}, scan.done)
 			if (!d.due) return
 			scan.done = d.index + 1
 			await startPicksCollect()

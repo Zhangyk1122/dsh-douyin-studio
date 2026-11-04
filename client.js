@@ -34,7 +34,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
     const API = '/api/douyin-studio'
-    const PANEL_BUILD = 34
+    const PANEL_BUILD = 35
     const { useState, useEffect, useRef, useCallback } = React
 
     /* ── 样式 ────────────────────────────────────────────────────────────
@@ -635,6 +635,7 @@ window.__ModuleLoader__.load({
       { g: '刷视频' },
       { k: 'scanPerRound', label: '每轮看几个', ph: '10', type: 'number', min: 0, max: 50 },
       { k: 'scanGap', label: '每看完一条歇几秒', ph: '6', type: 'number', min: 0, max: 60 },
+      { k: 'scanEveryMin', label: '两轮之间隔几分钟', ph: '240', type: 'number', min: 0, max: 1440, step: 10 },
       { k: 'minSec', label: '最短秒数', ph: '0 = 不限', type: 'number', min: 0, max: 600 },
       { k: 'maxSec', label: '最长秒数', ph: '0 = 不限', type: 'number', min: 0, max: 600 },
       { k: 'minDigg', label: '最低点赞', ph: '0 = 不限', type: 'number', min: 0, step: 100 },
