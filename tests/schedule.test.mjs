@@ -52,12 +52,15 @@ test('过了第一个点：该刷了，下标 0', () => {
   assert.equal(r.index, 0)
 })
 
-test('已经刷过一轮、又过了第二个点：取最后一个没刷的', () => {
+test('已经刷过一轮、又过了第二个点：取最后一个没刷的（但只能在窗口内补）', () => {
   const plan = { rounds: 3, from: 9, to: 22 }
-  const now = new Date(2026, 10, 4, 23, 30, 0)
-  const r = dueAt(now, plan, 1)
-  assert.equal(r.due, true)
-  assert.equal(r.index, 2)
+  /* 窗口内补刷：22:10 还在 30 分钟宽限里，最后一轮该补 */
+  const inWin = dueAt(new Date(2026, 10, 4, 22, 10, 0), plan, 1)
+  assert.equal(inWin.due, true)
+  assert.equal(inWin.index, 2)
+  /* 窗口外不补：设了「到 22 点结束」，23:30 就不该再刷 —— 这是设置，不是建议 */
+  const late = dueAt(new Date(2026, 10, 4, 23, 30, 0), plan, 1)
+  assert.equal(late.due, false)
 })
 
 test('今天的轮次刷完了：不再催', () => {

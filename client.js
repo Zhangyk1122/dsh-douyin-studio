@@ -113,6 +113,8 @@ window.__ModuleLoader__.load({
   display:grid;grid-template-columns:repeat(var(--dys-cols,1),minmax(0,1fr));
   align-content:start;gap:16px;
   scrollbar-width:thin;scrollbar-color:color-mix(in oklab, currentColor 22%, transparent) transparent;}
+/* 主卡横跨整行：列表类卡片上了封面之后需要宽度，挤在半栏里每行只剩一百多像素。 */
+[data-dys-view] > [data-dys-card][data-lead]{grid-column:1 / -1;}
 /* 只有一张卡的时候撑满（免得卡外露一块洞），并且横跨两列 */
 [data-dys-view] > *:only-child{min-height:100%;grid-column:1 / -1;}
 /* 只有真的滚起来了才淡出底部。不滚也淡 = 把卡片的底边擦掉，看着像缺一条边。 */
@@ -121,8 +123,6 @@ window.__ModuleLoader__.load({
   mask-image:linear-gradient(to bottom, #000 0, #000 calc(100% - 22px), transparent 100%);}
 /* 表单 / 数字类不封顶：它们本来就短，撑到 300px 只是给卡里留一块空白。
    列表类（挑 / 待办 / 今天 / 刷视频 / 后台）才需要定高 —— 那些是会越滚越长的。 */
-[data-dys-view][data-h="auto"]{height:auto;}
-[data-dys-view][data-h="auto"] > *{min-height:0;}
 [data-dys-view]::-webkit-scrollbar{width:8px;}
 [data-dys-view]::-webkit-scrollbar-thumb{border-radius:999px;background:color-mix(in oklab, currentColor 16%, transparent);}
 [data-dys-view]::-webkit-scrollbar-thumb:hover{background:color-mix(in oklab, currentColor 26%, transparent);}
@@ -223,9 +223,15 @@ window.__ModuleLoader__.load({
 [data-dys-btn][data-ghost]{border-color:transparent;color:var(--dys-dim);padding:3px 7px;}
 
 /* ── 挑：一条一行，右侧只放两个动作（发我 / 不要） ── */
-[data-dys-pick]{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 10px;align-items:center;
+[data-dys-pick]{display:grid;grid-template-columns:56px minmax(0,1fr) auto;gap:6px 10px;align-items:start;
   padding:9px 0;border-bottom:1px solid var(--dys-line);}
 [data-dys-pick]:last-child{border-bottom:0;}
+/* 没有封面的行：不留空灰块，但把左边距补上 —— 一个列表只能有一条左边缘，
+   否则有无封面的行会参差不齐，比空着更难看 */
+[data-dys-pick][data-nocover]{grid-template-columns:minmax(0,1fr) auto;padding-left:66px;}
+/* 封面：判断「好不好看」有一半在这张图上。加载失败就退成色块，不显示破图标。 */
+[data-dys-thumb]{width:56px;height:56px;border-radius:8px;object-fit:cover;display:block;
+  background:var(--dys-fill2);grid-row:1 / span 2;}
 [data-dys-pickt]{font-size:12.5px;line-height:1.45;overflow:hidden;display:-webkit-box;
   -webkit-line-clamp:2;-webkit-box-orient:vertical;}
 [data-dys-pickm]{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;}
@@ -305,6 +311,10 @@ window.__ModuleLoader__.load({
   background:color-mix(in oklab, var(--dys-ok) 10%, transparent);}
 
 [data-dys-in][type="number"]{appearance:auto;-moz-appearance:auto;padding-right:2px;} /* 数字框留住上下箭头 */
+/* 布尔字段：一个勾 + 一句状态。勾选本身就是状态，不用再加第二个提示点。 */
+[data-dys-check]{display:inline-flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;min-width:0;}
+[data-dys-check] > input{width:14px;height:14px;accent-color:var(--dys-blue);cursor:pointer;flex:0 0 auto;margin:0;}
+[data-dys-check] > span{color:color-mix(in oklab, currentColor 78%, transparent);}
 [data-dys-in]{appearance:none;font:inherit;font-size:12px;line-height:1.5;padding:3px 8px;border-radius:8px;
   border:1px solid var(--dys-line2);background:transparent;color:inherit;min-width:0;}
 [data-dys-in]:focus{outline:none;border-color:color-mix(in oklab, var(--dys-blue) 60%, transparent);} [data-dys-in]::placeholder{color:var(--dys-dim);}
@@ -595,7 +605,18 @@ window.__ModuleLoader__.load({
     const Field = ({ f, v, onChange, onCommit }) => {
       const val = v == null ? '' : v
       const blur = (e) => { if (typeof onCommit === 'function') onCommit(f.k, e.target.value) }
-      const ctl = f.type === 'select'
+      const ctl = f.type === 'bool'
+        /* 开关：勾完立刻落盘（不等 blur）—— 勾选框没有"输完"这个动作 */
+        ? h('label', { 'data-dys-check': '' },
+          h('input', {
+            type: 'checkbox', checked: Boolean(val),
+            onChange: (e) => {
+              onChange(f.k, e.target.checked)
+              if (typeof onCommit === 'function') onCommit(f.k, e.target.checked)
+            },
+          }),
+          h('span', null, Boolean(val) ? (f.on || '开') : (f.off || '关')))
+        : f.type === 'select'
         ? h('select', { 'data-dys-in': '', value: val, onChange: (e) => onChange(f.k, e.target.value), onBlur: blur },
           f.options.map((o) => {
             const ov = typeof o === 'string' ? o : o.value
@@ -644,6 +665,8 @@ window.__ModuleLoader__.load({
       { k: 'scanFrom', label: '从几点开始', ph: '9', type: 'number', min: 0, max: 23 },
       { k: 'scanTo', label: '到几点结束', ph: '22', type: 'number', min: 0, max: 23 },
       { g: '时间' },
+      /* 以前只有默认值和判断逻辑，面板上没开关 —— 等于改不了。 */
+      { k: 'notifyQuiet', label: '静音时段不叫你', type: 'bool', on: '开（按下面时段）', off: '关（随时可以叫）' },
       { k: 'quietFrom', label: '静音从', ph: 'HH:MM' },
       { k: 'quietTo', label: '静音到', ph: 'HH:MM' },
       /* 谷时：这些动作每步都过模型，白天跑等于按原价买流程。空着 = 不限制。 */
@@ -1486,7 +1509,7 @@ window.__ModuleLoader__.load({
      * 设计取舍：一屏最多 8 条，每条只给两个动作。
      * 「发我」是撤不回来的（真把卡片发进你私信），所以两次点击 + 按钮变字。
      * 赞 / 收藏 还没接 —— 那要动 budget.mjs 的额度表，不在这版里假装有。 */
-    const Picks = () => {
+    const Picks = ({ onOpen }) => {
       const [st, setSt] = useState(null)
       const [err, setErr] = useState('')
       const [busy, setBusy] = useState('')
@@ -1540,20 +1563,34 @@ window.__ModuleLoader__.load({
       },
         items.length
           ? h('div', null, items.slice(0, 8).map((it) => h('div', {
-            key: it.aweme_id, 'data-dys-pick': '',
+            key: it.aweme_id, 'data-dys-pick': '', 'data-nocover': it.cover ? undefined : '',
             /* 分数不进界面：0–1 的数字对「要不要看」没有帮助，列表本身已经按它排过序。
              * 留在 title 里，排查时鼠标一停就能看到。 */
             title: '匹配度 ' + num(it.score) + (it.source ? ' · 来自 ' + it.source : ''),
           },
+            it.cover
+              ? h('img', {
+                'data-dys-thumb': '', src: it.cover, alt: '', loading: 'lazy',
+                /* 封面地址会过期，加载失败就退回色块 —— 别在列表里放一排破图标 */
+                onError: (e) => { try { e.currentTarget.style.visibility = 'hidden' } catch (_) {} },
+              })
+              /* 没有封面就**整格不占**：留一块 56px 的灰比什么都难看，还会把正文挤到右边 */
+              : null,
             h('div', { 'data-dys-pickmain': '' },
-              h('div', { 'data-dys-pickt': '', title: it.desc || '' }, it.desc || '（没有文案）'),
+              h('div', { 'data-dys-pickt': '', title: it.desc || '' },
+                /* 点标题 = 在机器人的浏览器里打开。不看就发，等于闭着眼挑。 */
+                h('button', {
+                  'data-dys-link': '', title: '在机器人的浏览器里打开',
+                  onClick: () => { if (onOpen) onOpen('https://www.douyin.com/video/' + it.aweme_id) },
+                }, it.desc || '（没有文案）')),
               h('div', { 'data-dys-pickm': '' },
                 h('span', { 'data-dys-xs': '', 'data-dys-dim': '' },
                   (it.author || '?') + ' · ' + (num(it.duration_sec) || '—') + 's · 赞 ' + num(it.digg)),
                 h('span', { 'data-dys-xs': '', 'data-dys-dim': '' }, '· ' + (it.why || '')))),
             h('div', { 'data-dys-pickacts': '' },
               h(Btn, {
-                label: armed === it.aweme_id ? '确认发' : '发我',
+                label: it.state === 'sent' ? '已发' : (armed === it.aweme_id ? '确认发' : '发我'),
+                disabled: it.state === 'sent',
                 /* 一屏四个实心蓝按钮 = 谁都不突出（b13 那条规矩）。
                  * 所以平时是描边，点了变「确认发」才实心 —— 实心只代表"即将发生"。 */
                 primary: armed === it.aweme_id,
@@ -1611,20 +1648,21 @@ window.__ModuleLoader__.load({
         check()
         const ro = new ResizeObserver(check)
         ro.observe(el)
-        if (el.firstElementChild) ro.observe(el.firstElementChild)
+        /* 一个区现在是好几张卡：只盯第一张，后面几张变高就看不见了 */
+        for (const c of el.children) ro.observe(c)
         return () => ro.disconnect()
       }, [view])
       /* 角标：回应=几条要回，找内容=几条新候选。拉不到就空着 —— 不显示假数字。 */
       const [badges, setBadges] = useState({})
       useEffect(() => {
         let dead = false
-        Promise.all([jget('/picks'), jget('/inbox?limit=8')]).then(([p, i]) => {
+        /* ⚠️ 角标只读缓存（/inbox/count），**不能**打 /inbox —— 那个接口在缓存过期时
+         * 会顺手起一轮真浏览器扫描（私信+通知+评论三条链）。为了一个数字去刷一遍抖音，
+         * 是最贵的一种「顺手」。 */
+        Promise.all([jget('/picks'), jget('/inbox/count')]).then(([p, i]) => {
           if (dead) return
           const find = ((p || {}).items || []).filter((x) => x && x.state === 'new').length
-          /* 只数「值得回」的：列表里就是这么筛的（(all || it.worth)）。
-           * 数全部会让角标比点进去看到的条数多 —— 那是最容易被当成 bug 的那种"小对不上"。 */
-          const reply = ((((i || {}).data || {}).items) || []).filter((x) => x && x.worth).length
-          setBadges({ find, reply })
+          setBadges({ find, reply: Number((i && i.reply) || 0) })
         }).catch(() => {})
         return () => { dead = true }
       }, [])
@@ -1775,7 +1813,7 @@ window.__ModuleLoader__.load({
       const viewCards = {
         today: [nodeBudget, nodeDigest, nodeTrend],
         reply: [nodeInbox, nodeAuto, nodeOps],
-        find: [h(Picks), nodeFeed],
+        find: [h(Picks, { onOpen: openInBot }), nodeFeed],
         settings: [nodeSettings],
       }[view] || [nodeDigest]
       const tab = (id, label) => h('button', {

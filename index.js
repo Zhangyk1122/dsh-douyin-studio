@@ -482,6 +482,17 @@ export function apply(ctx, config) {
 						})
 						return sendJson(res, 200, out.body)
 					}
+					/* 只要一个数字（tab 角标）—— 读缓存，**绝不触发刷新**。
+					 * 角标不值得为它跑一轮浏览器：打开设置页不是「我要看私信」。 */
+					if (req.method === 'GET' && p === '/inbox/count') {
+						const c = readInboxCache()
+						const d = (c && c.data) || null
+						const k = (x) => Number((d && d.counts && d.counts[x]) || 0)
+						return sendJson(res, 200, {
+							ok: true, cached: Boolean(c), at: (c && c.at) || '',
+							reply: d ? k('dm') + k('at') + k('own') : 0,
+						})
+					}
 					if (req.method === 'GET' && p === '/budget') {
 						const { stats: bStats, recent: bRecent } = await import('./lib/budget.mjs')
 						const { LIMITS: bLed, stats: lStats } = await import('./lib/ledger.mjs')
@@ -925,18 +936,23 @@ export function apply(ctx, config) {
 	/* 每天自动刷几轮：轮次由 lib/schedule.mjs 铺开（纯函数，单测钉着）。
 	 * 只有「现在轮到了、今天还没刷过这一轮」才真去刷；跨天清零。
 	 * 刷的是 feed —— 只读，不点赞不评论，所以不占消息额度也不动别人的东西。 */
-	const scan = { day: '', done: 0 }
+	/* 轮次落盘（2026-11-04）：以前存在内存里，DSH 一重启就归零，
+	 * 当天已刷过的那几轮会被当成没刷过再刷一遍。 */
 	const scanTick = async () => {
 		try {
 			const st = readSettings()
 			const { dayKey, dueAt } = await import('./lib/schedule.mjs')
+			const { homeDir } = await import('./lib/budget.mjs')
+			const file = join(homeDir(), 'scan-state.json')
 			const today = dayKey(new Date())
-			if (scan.day !== today) { scan.day = today; scan.done = 0 }
+			const prev = readJsonSafe(file, { day: '', done: 0 }) || { day: '', done: 0 }
+			const done = prev.day === today ? Math.max(0, Number(prev.done) || 0) : 0
 			const d = dueAt(new Date(), {
 				rounds: st.scanRounds, from: st.scanFrom, to: st.scanTo, everyMin: st.scanEveryMin,
-			}, scan.done)
+			}, done)
 			if (!d.due) return
-			scan.done = d.index + 1
+			/* 先记一笔再刷：宁可这一轮没刷成，也不要因为中途崩了就在同一个点上反复重试。 */
+			atomicWriteJson(file, { day: today, done: d.index + 1 })
 			await startPicksCollect()
 		} catch { /* 刷失败不该连累别的定时器 */ }
 	}
