@@ -34,7 +34,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
     const API = '/api/douyin-studio'
-    const PANEL_BUILD = 26
+    const PANEL_BUILD = 27
     const { useState, useEffect, useRef, useCallback } = React
 
     /* ── 样式 ────────────────────────────────────────────────────────────
@@ -43,7 +43,7 @@ window.__ModuleLoader__.load({
     const CSS = `
 [data-dys]{
   --dys-fs:13px;
-  --dys-r:14px;
+  --dys-r:12px;
   --dys-ink:currentColor;
   --dys-line:color-mix(in oklab, currentColor 11%, transparent);
   --dys-line2:color-mix(in oklab, currentColor 20%, transparent);
@@ -87,8 +87,27 @@ window.__ModuleLoader__.load({
 [data-dys-col]{display:flex;flex-direction:column;gap:14px;min-width:0;}
 
 /* ── 卡片：只有两级。主卡（收件箱）提亮一档，其余一律同款，不靠彩线区分 ── */
-[data-dys-card]{position:relative;display:flex;flex-direction:column;gap:11px;min-width:0;padding:13px 15px 14px;border-radius:var(--dys-r);border:1px solid var(--dys-line);background:var(--dys-fill);}
+[data-dys-card]{position:relative;display:flex;flex-direction:column;gap:12px;min-width:0;padding:15px 17px 16px;border-radius:var(--dys-r);border:1px solid var(--dys-line);background:var(--dys-fill);}
 [data-dys-card][data-lead]{background:var(--dys-lead);border-color:var(--dys-line2);}
+/* ── 分段控件：八个区，一次只画一个 ── */
+[data-dys-seg]{display:flex;gap:3px;flex-wrap:wrap;padding:3px;border-radius:12px;background:var(--dys-fill2);border:1px solid var(--dys-line);}
+[data-dys-seg] > button{flex:0 0 auto;appearance:none;cursor:pointer;font:inherit;font-size:12px;line-height:1.5;
+  padding:5px 12px;border:0;border-radius:9px;background:transparent;color:var(--dys-dim);white-space:nowrap;
+  transition:color .12s ease, background .12s ease, box-shadow .12s ease;}
+[data-dys-seg] > button:hover{color:var(--dys-ink);background:color-mix(in oklab, var(--dys-ink) 5%, transparent);}
+[data-dys-seg] > button[data-on]{background:var(--dys-fill);color:var(--dys-ink);font-weight:600;
+  box-shadow:0 1px 2px rgba(0,0,0,.16), inset 0 0 0 1px var(--dys-line2);}
+/* 内容区封顶一屏：列表在卡片里滚，页面本身不跟着长 */
+[data-dys-view] > *{max-height:min(72vh,640px);overflow:auto;}
+/* 设置卡内部四页 */
+[data-dys-tabs]{display:flex;gap:2px;padding:2px;border-radius:10px;background:var(--dys-fill2);}
+[data-dys-tab]{flex:1 1 0;appearance:none;cursor:pointer;font:inherit;font-size:11.5px;line-height:1.5;
+  padding:4px 6px;border:0;border-radius:8px;background:transparent;color:var(--dys-dim);
+  display:flex;align-items:center;justify-content:center;gap:4px;}
+[data-dys-tab]:hover{color:var(--dys-ink);}
+[data-dys-tab][data-on]{background:var(--dys-fill);color:var(--dys-ink);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.14);}
+[data-dys-tab] > i{font-style:normal;font-size:10px;opacity:.5;}
+
 /* 头部：标题不缩、不换行；工具区靠右，放不下就整体掉下一行（标题被压成竖排是排版事故）。 */
 [data-dys-head]{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;min-width:0;}
 [data-dys-title]{display:flex;align-items:center;gap:7px;flex:0 0 auto;white-space:nowrap;font-size:12.5px;font-weight:600;color:color-mix(in oklab, currentColor 86%, transparent);}
@@ -119,6 +138,11 @@ window.__ModuleLoader__.load({
 [data-dys-stat]{display:flex;flex-direction:column;align-items:flex-end;gap:1px;min-width:52px;}
 [data-dys-stat] b{display:block;font-size:15px;font-weight:600;line-height:1.3;}
 [data-dys-stat] span{font-size:11px;color:var(--dys-dim);}
+[data-dys-herobar]{grid-column:1 / -1;display:flex;align-items:center;gap:10px;margin-top:-2px;padding-top:10px;border-top:1px solid var(--dys-line);}
+[data-dys-herobar] > span{font-size:10.5px;letter-spacing:.06em;color:var(--dys-dim);white-space:nowrap;}
+[data-dys-herobar] > i{flex:1 1 0;height:4px;border-radius:999px;background:var(--dys-fill2);overflow:hidden;}
+[data-dys-herobar] > i > b{display:block;height:100%;border-radius:999px;transition:width .3s ease;}
+
 
 [data-dys][data-cols="1"] [data-dys-hero]{grid-template-columns:auto minmax(0,1fr);row-gap:12px;}
 [data-dys][data-cols="1"] [data-dys-stats]{grid-column:1 / -1;flex-wrap:wrap;gap:14px 20px;}
@@ -561,8 +585,16 @@ window.__ModuleLoader__.load({
       { k: 'replyStyle', label: '说话语气', type: 'select', options: ['温和', '简短', '专业', '幽默'] },
     ]
 
+    /* 18 个字段一次摊开就是两张屏。按 g 切成四页，一次只显示一页。 */
+    const SETTING_GROUPS = SETTING_FIELDS.reduce((acc, f) => {
+      if (f.g) acc.push({ name: f.g, fields: [] })
+      else if (acc.length) acc[acc.length - 1].fields.push(f)
+      return acc
+    }, [])
+
     const SettingsCard = ({ data, err, loading, onSaved }) => {
       const [v, setV] = useState(null)
+      const [grp, setGrp] = useState(SETTING_GROUPS[0] && SETTING_GROUPS[0].name)
       const [busy, setBusy] = useState(false)
       const [note, setNote] = useState('')
       const src = data && data.settings
@@ -601,10 +633,16 @@ window.__ModuleLoader__.load({
           ? h('div', { 'data-dys-col': '', style: { gap: '6px' } }, [0, 1, 2].map((i) => h('div', { key: i, 'data-dys-skel': '' })))
           : null,
         v
+          ? h('div', { 'data-dys-tabs': '' },
+            SETTING_GROUPS.map((g) => h('button', {
+              key: g.name, type: 'button', 'data-dys-tab': '', 'data-on': grp === g.name ? '' : undefined,
+              onClick: () => setGrp(g.name),
+            }, g.name, h('i', null, g.fields.length))))
+          : null,
+        v
           ? h('div', { 'data-dys-formgrid': '' },
-            SETTING_FIELDS.map((f) => f.g
-              ? h('div', { key: 'g:' + f.g, 'data-dys-group': '' }, f.g)
-              : h(Field, { key: f.k, f, v: v[f.k], onChange: set, onCommit: saveField })))
+            (SETTING_GROUPS.find((g) => g.name === grp) || SETTING_GROUPS[0] || { fields: [] }).fields
+              .map((f) => h(Field, { key: f.k, f, v: v[f.k], onChange: set, onCommit: saveField })))
           : null,
         err ? h(ErrLine, { text: err }) : null,
         h('div', { 'data-dys-note': '' },
@@ -845,6 +883,12 @@ window.__ModuleLoader__.load({
       const nick = u.nickname || '（读不到账号）'
       const watchOn = !!(watch && watch.running)
       const logged = !!(status && status.ok)
+      /* 看板只留一个主数字：今天还能发几条。旁边一条细进度条，
+       * 扫一眼就知道离限流还有多远，不用去读小字。 */
+      const usedMsgs = num(msgs.day)
+      const capMsgs = num(msgs.max)
+      const pct = capMsgs > 0 ? Math.min(100, Math.round(usedMsgs / capMsgs * 100)) : 0
+      const tone = pct >= 90 ? 'var(--dys-bad)' : pct >= 70 ? 'var(--dys-amber)' : 'var(--dys-blue)'
       return h('div', { 'data-dys-hero': '' },
         h('div', { 'data-dys-ava': '' },
           (logged && u.nickname) ? String(u.nickname).slice(0, 1) : Ico({ name: 'bot', size: 19 })),
@@ -864,7 +908,11 @@ window.__ModuleLoader__.load({
           stat(u.follower, '粉丝'),
           stat(u.aweme_count, '作品'),
           stat(u.total_favorited, '获赞'),
-          h(Btn, { label: '刷新', icon: 'refresh', ghost: true, busy: refreshing, busyLabel: '读…', onClick: onRefresh })))
+          h(Btn, { label: '刷新', icon: 'refresh', ghost: true, busy: refreshing, busyLabel: '读…', onClick: onRefresh })),
+        h('div', { 'data-dys-herobar': '' },
+          h('span', null, '今日消息'),
+          h('i', null, h('b', { style: { width: pct + '%', background: tone, boxShadow: '0 0 12px -2px ' + tone } })),
+          h('span', null, usedMsgs + ' / ' + (capMsgs || '—'))))
     }
 
     /* ── 额度 ── */
@@ -1360,6 +1408,10 @@ window.__ModuleLoader__.load({
       const [forcingInbox, setForcingInbox] = useState(false)
       const rootRef = useRef(null)
       const [cols, setCols] = useState('2')
+      /* 当前看哪一区。记住上次停在哪儿 —— 一天里 80% 的时间都在「待办」。 */
+      const [view, setView] = useState(() => {
+        try { return localStorage.getItem('dys-view') || 'inbox' } catch (_) { return 'inbox' }
+      })
 
       const base = ['/status', '/budget', '/config', '/watch', '/duty', '/queue', '/settings', '/autopilot', '/trend?days=14', '/publishes?n=30', '/ledger?n=40', '/errors?n=20']
 
@@ -1503,6 +1555,13 @@ window.__ModuleLoader__.load({
         loading: loading['/ledger?n=40'] || loading['/publishes?n=30'] || loading['/errors?n=20'],
       })
 
+      /* 一次只画一张卡 —— 页面高度就定住了，不会越用越长。
+       * 八张卡一张都不少，只是不再同时挂在 DOM 上。 */
+      const VIEWS = [['inbox', '待办'], ['digest', '今天'], ['auto', '自主'], ['settings', '设置'],
+        ['feed', '刷视频'], ['budget', '额度'], ['ops', '后台'], ['trend', '趋势']]
+      const viewNode = { inbox: nodeInbox, digest: nodeDigest, auto: nodeAuto, settings: nodeSettings,
+        feed: nodeFeed, budget: nodeBudget, ops: nodeOps, trend: nodeTrend }[view] || nodeInbox
+
       return h('div', {
         'data-dys': '', 'data-theme': theme, 'data-cols': cols, ref: rootRef,
         style: { '--dys-cols': cols },
@@ -1512,14 +1571,17 @@ window.__ModuleLoader__.load({
           refreshing, onRefresh: () => { reloadAll(); load(['/inbox?limit=8']) },
         }),
 
-        cols === '1'
-          ? h('div', { 'data-dys-col': '' },
-            [nodeInbox, nodeDigest, nodeAuto, nodeFeed, nodeBudget, nodeOps, nodeSettings, nodeTrend])
-          /* 两栏按高度配平过：左栏 收件箱/日报/自主/趋势，右栏 设置/刷视频/额度/后台。
-           * 原来左三右五，左栏底下空出半屏 —— 那种"空"会让人觉得页面没做完。 */
-          : h('div', { 'data-dys-grid': '' },
-            h('div', { 'data-dys-col': '' }, [nodeInbox, nodeDigest, nodeAuto, nodeTrend]),
-            h('div', { 'data-dys-col': '' }, [nodeSettings, nodeFeed, nodeBudget, nodeOps])),
+        /* 八个区一次只画一个：页面高度就定住了，不会越用越长。 */
+        h('div', { 'data-dys-seg': '' },
+          VIEWS.map(([id, label]) => h('button', {
+            key: id, type: 'button', 'data-on': view === id ? '' : undefined,
+            onClick: () => {
+              setView(id)
+              try { localStorage.setItem('dys-view', id) } catch (_) {}
+            },
+          }, label))),
+
+        h('div', { 'data-dys-view': '' }, viewNode),
 
         /* 动作结果：折起来，别糊脸 */
         msg ? h('div', {
