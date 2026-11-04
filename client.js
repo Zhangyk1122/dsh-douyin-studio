@@ -1622,7 +1622,9 @@ window.__ModuleLoader__.load({
         Promise.all([jget('/picks'), jget('/inbox?limit=8')]).then(([p, i]) => {
           if (dead) return
           const find = ((p || {}).items || []).filter((x) => x && x.state === 'new').length
-          const reply = ((((i || {}).data || {}).items) || []).length
+          /* 只数「值得回」的：列表里就是这么筛的（(all || it.worth)）。
+           * 数全部会让角标比点进去看到的条数多 —— 那是最容易被当成 bug 的那种"小对不上"。 */
+          const reply = ((((i || {}).data || {}).items) || []).filter((x) => x && x.worth).length
           setBadges({ find, reply })
         }).catch(() => {})
         return () => { dead = true }

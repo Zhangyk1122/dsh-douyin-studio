@@ -253,7 +253,10 @@ export function apply(ctx, config) {
 			const m = String(v || '').match(/^([01]\d|2[0-3]):([0-5]\d)$/)
 			return m ? Number(m[1]) + Number(m[2]) / 60 : undefined
 		}
-		const file = join(homedir(), '.dsh', 'douyin-studio', 'notify-state.json')
+		/* 计价文件必须跟其它状态放一处：budget / ledger / queue 全都认 DSH_HOME，
+		 * 只有这里硬编码 homedir() 的话，装进 profile 或临时 HOME 跑测试就会写错地方。 */
+		const { homeDir: budgetHome } = await import('./lib/budget.mjs')
+		const file = join(budgetHome(), 'notify-state.json')
 		const prev = readJsonSafe(file, { day: '', share: 0, at: 0 }) || { day: '', share: 0, at: 0 }
 		const today = dayKey(new Date())
 		const used = prev.day === today
