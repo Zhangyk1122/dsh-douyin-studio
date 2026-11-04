@@ -34,7 +34,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
     const API = '/api/douyin-studio'
-    const PANEL_BUILD = 32
+    const PANEL_BUILD = 33
     const { useState, useEffect, useRef, useCallback } = React
 
     /* ── 样式 ────────────────────────────────────────────────────────────
@@ -609,6 +609,16 @@ window.__ModuleLoader__.load({
           })
           : h('input', {
             'data-dys-in': '', value: val, placeholder: f.ph || '',
+            /* 数字字段给真的 number 输入框：右侧能点上下箭头调，不用敲键盘
+             * （主人说别人的插件都这样）。min/max 只是提示，后端还会再夹一次。 */
+            ...(f.type === 'number'
+              ? {
+                type: 'number',
+                step: f.step || 1,
+                ...(f.min != null ? { min: f.min } : {}),
+                ...(f.max != null ? { max: f.max } : {}),
+              }
+              : {}),
             onChange: (e) => onChange(f.k, e.target.value), onBlur: blur,
           })
       return h('label', { 'data-dys-field': '' },
@@ -623,17 +633,17 @@ window.__ModuleLoader__.load({
       { k: 'keywords', label: '关键词', ph: '逗号分隔；填了会按词去搜' },
       { k: 'blockKeywords', label: '屏蔽词', ph: '命中就跳过' },
       { g: '刷视频' },
-      { k: 'scanPerRound', label: '每轮看几个', ph: '10' },
-      { k: 'minSec', label: '最短秒数', ph: '0 = 不限' },
-      { k: 'maxSec', label: '最长秒数', ph: '0 = 不限' },
-      { k: 'minDigg', label: '最低点赞', ph: '0 = 不限' },
+      { k: 'scanPerRound', label: '每轮看几个', ph: '10', type: 'number', min: 0, max: 50 },
+      { k: 'minSec', label: '最短秒数', ph: '0 = 不限', type: 'number', min: 0, max: 600 },
+      { k: 'maxSec', label: '最长秒数', ph: '0 = 不限', type: 'number', min: 0, max: 600 },
+      { k: 'minDigg', label: '最低点赞', ph: '0 = 不限', type: 'number', min: 0, step: 100 },
       /* 自动刷：几点到几点之间铺开几轮。0 轮就是关。 */
-      { k: 'scanRounds', label: '每天自己刷几轮', ph: '0 = 不自动刷' },
-      { k: 'scanFrom', label: '从几点开始', ph: '9' },
-      { k: 'scanTo', label: '到几点结束', ph: '22' },
+      { k: 'scanRounds', label: '每天自己刷几轮', ph: '0 = 不自动刷', type: 'number', min: 0, max: 12 },
+      { k: 'scanFrom', label: '从几点开始', ph: '9', type: 'number', min: 0, max: 23 },
+      { k: 'scanTo', label: '到几点结束', ph: '22', type: 'number', min: 0, max: 23 },
       { g: '时间' },
       /* 每天投递：几条 + 几点。0 条就是不开。 */
-      { k: 'digestPerDay', label: '每天发我几条视频', ph: '0 = 不发' },
+      { k: 'digestPerDay', label: '每天发我几条视频', ph: '0 = 不发', type: 'number', min: 0, max: 5 },
       { k: 'digestAt', label: '几点发视频', ph: '21:00' },
       { k: 'quietFrom', label: '静音从', ph: 'HH:MM' },
       { k: 'quietTo', label: '静音到', ph: 'HH:MM' },
@@ -641,11 +651,11 @@ window.__ModuleLoader__.load({
       { k: 'activeFrom', label: '谷时从', ph: '00:30' },
       { k: 'activeTo', label: '谷时到', ph: '08:30' },
       /* 两个出口分开数：私信分享几条、评论区 @ 几条。0 = 那条路不走。 */
-      { k: 'sharePerDay', label: '每天私信发你几条', ph: '0 = 不发' },
-      { k: 'atPerDay', label: '每天评论区 @ 你几条', ph: '0 = 不 @' },
+      { k: 'sharePerDay', label: '每天私信发你几条', ph: '0 = 不发', type: 'number', min: 0, max: 10 },
+      { k: 'atPerDay', label: '每天评论区 @ 你几条', ph: '0 = 不 @', type: 'number', min: 0, max: 10 },
       /* 这两个以前只在插件 config 里，改完还得重启；现在存了就把定时器重开一遍 */
-      { k: 'dutyEveryMin', label: '回评论隔几分钟看一次', ph: '30' },
-      { k: 'watchEverySec', label: '盯私信隔几秒看一次', ph: '90' },
+      { k: 'dutyEveryMin', label: '回评论隔几分钟看一次', ph: '30', type: 'number', min: 5, max: 240, step: 5 },
+      { k: 'watchEverySec', label: '盯私信隔几秒看一次', ph: '90', type: 'number', min: 30, max: 600, step: 10 },
       { g: '说话' },
       { k: 'persona', label: '人设（你谁）', ph: '留空 = 通用口吻' },
       { k: 'botName', label: '自称（日报标题）', ph: '留空 = 「日报」' },
