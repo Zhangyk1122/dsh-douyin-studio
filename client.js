@@ -556,6 +556,8 @@ window.__ModuleLoader__.load({
       { k: 'activeFrom', label: '谷时从', ph: '00:30' },
       { k: 'activeTo', label: '谷时到', ph: '08:30' },
       { g: '说话' },
+      { k: 'persona', label: '人设（你谁）', ph: '留空 = 通用口吻' },
+      { k: 'botName', label: '自称（日报标题）', ph: '留空 = 「日报」' },
       { k: 'replyStyle', label: '说话语气', type: 'select', options: ['温和', '简短', '专业', '幽默'] },
     ]
 

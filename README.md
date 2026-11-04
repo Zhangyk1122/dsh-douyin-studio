@@ -315,6 +315,9 @@ node tools/dy.mjs quick --video "C:\Users\admin\.dsh\media\onebot\media_xxx.mp4"
 - 「演练一轮」是 dry：不生成、不发送、不记账，只列出它会怎么做。
 - **每天投递**：`digestAt`（默认 21:00）+ `digestPerDay`（默认 2，0 = 不发）到点从刷视频的筛选结果里挑几条，用分享卡片私信发给 `ownerNick`；当天发过的记在 `digest.sent`，不会重复。它也受谷时与额度闸约束（投递记 `dm` 通道）。
 - **主人号免限**：`ownerUid` 填了之后，那一人不吃「同一人每天 2 条」（日总量 / 小时 / 间隔 / 同楼照旧）。
+- **口吻**：`persona`（设置页「人设（你谁）」，≤200 字）就是喂给模型的「你是谁」，回私信 / 回 @ / 回评论都读它；
+  `botName` 决定报平安的标题（`<botName>日报`，留空就叫「日报」）。两个都留空 = 中性口吻，
+  不会带任何别人预设的角色——**2026-11-04 之前这三处写死了同一个角色**，别人装上会用别人的口吻说话。
 
 状态文件：`~/.dsh/douyin-studio/autopilot-state.json`（`replied` / `done` / 日志最近 20 条）。
 
@@ -372,8 +375,10 @@ b12 读错字段，所以「出错记录」永远显示一个空白的 `error`�
 node --test tests\*.test.mjs
 ```
 
-十一份：`publish-steps`(17) `publish-seam`(18) `unread`(10) `publishes`(6) `fsx`(15)
-`ledger-broken`(14) `budget`(17) `inbox`(8) `proc`(6) `guard`(10) `cache`(12)。全部是「本地逻辑」的测试——**它们绿灯不代表发布成功**。
+十九个文件、261 例。老的十一份：`publish-steps`(17) `publish-seam`(18) `unread`(10)
+`publishes`(6) `fsx`(15) `ledger-broken`(14) `budget`(17) `inbox`(8) `proc`(6) `guard`(10) `cache`(12)；
+后来补的八份（共 119 例）：`autopilot` `autopilot-io` `settings` `feed` `policy` `export`
+`export-rows` `export-route`。全部是「本地逻辑」的测试——**它们绿灯不代表发布成功**。
 其中两条是防回退的：`proc` 的并发用例（谁把 `run()` 改回同步它就红）、
 `cache` 的 stale 用例（谁把「先答再改」改成 await，它就红）。
 发布那部分只有真页面跑一遍才算数（见上面「发布」那节）。

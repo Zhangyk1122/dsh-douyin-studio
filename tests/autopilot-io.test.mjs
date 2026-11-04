@@ -95,15 +95,15 @@ describe('runReport：日报只报数字', () => {
 	})
 
 	it('dry：给出要发的话，标题带日期', async () => {
-		writeSettings({ ownerNick: '辰辰辰chen', autoReport: true })
+		writeSettings({ ownerNick: 'me-owner', autoReport: true })
 		const r = await auto.runReport({ dry: true })
 		assert.equal(r.ok, true)
-		assert.match(r.would.text, /小汐日报 · \d+\/\d+/)
-		assert.equal(r.would.to, '辰辰辰chen')
+		assert.match(r.would.text, /日报 · \d+\/\d+/)
+		assert.equal(r.would.to, 'me-owner')
 	})
 
 	it('报平安没开 → 跳过', async () => {
-		writeSettings({ ownerNick: '辰辰辰chen', autoReport: false })
+		writeSettings({ ownerNick: 'me-owner', autoReport: false })
 		const r = await auto.runReport({ dry: false })
 		assert.equal(r.ok, true)
 		assert.match(String(r.skipped), /没开/)
