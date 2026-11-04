@@ -238,6 +238,43 @@ export function apply(ctx, config) {
 			return { authors: [], tags: [], evidence: 0 }
 		}
 	}
+	/* 「看到好看的，叫一下主人」。一天最多 notifyPerDay 次，档位按 notifyTier：
+	 *   dm   → 分享卡片发私信
+	 *   at   → 在那条视频的评论区 @ 主人
+	 *   none → 只入库，不打扰
+	 * 计数落在 notify-state.json，跨天清零。没配主人昵称就直接跳过（别乱 @ 人）。 */
+	const tellOwner = async (cand, st) => {
+		if (!Array.isArray(cand) || !cand.length) return { ok: true, sent: false, why: '这轮没有候选' }
+		if (!st.ownerNick) return { ok: true, sent: false, why: '没填主人昵称，不敢乱叫' }
+		const top = [...cand].sort((a, b) => (b.score || 0) - (a.score || 0))[0]
+		const { allowNotify } = await import('./lib/notify.mjs')
+		const { isQuiet } = await import('./lib/toast.mjs')
+		const { dayKey } = await import('./lib/schedule.mjs')
+		const hhmm = (v) => {
+			const m = String(v || '').match(/^([01]\d|2[0-3]):([0-5]\d)$/)
+			return m ? Number(m[1]) + Number(m[2]) / 60 : undefined
+		}
+		const file = join(homedir(), '.dsh', 'douyin-studio', 'notify-state.json')
+		const prev = readJsonSafe(file, { day: '', n: 0 }) || { day: '', n: 0 }
+		const today = dayKey(new Date())
+		const calledToday = prev.day === today ? Number(prev.n) || 0 : 0
+		const quiet = st.notifyQuiet ? isQuiet(new Date(), { from: hhmm(st.quietFrom), to: hhmm(st.quietTo) }) : false
+		const d = allowNotify({ items: [top], calledToday, perDay: st.notifyPerDay, maxTier: st.notifyTier, quiet })
+		if (!d || !d.ok || !d.tier || d.tier === 'ingest') return { ok: true, sent: false, why: (d && d.why) || '今天不叫', tier: d && d.tier }
+		const desc = String(top.desc || '').replace(/\s+/g, ' ').slice(0, 24)
+		let r = null
+		if (d.tier === 'dm') {
+			r = await run(['share', '--aweme', top.aweme_id, '--to', st.ownerNick,
+				...(st.ownerSec ? ['--sec', st.ownerSec] : [])], { timeout: 180000 })
+		} else if (d.tier === 'at') {
+			r = await run(['comment-at', '--aweme', top.aweme_id, '--uid', st.ownerUid, '--text',
+				'这条我觉得你会喜欢：' + (desc || '刷到的一个')], { timeout: 180000 })
+		}
+		const sent = Boolean(r && r.ok)
+		if (sent) atomicWriteJson(file, { day: today, n: calledToday + 1, at: new Date().toISOString(), aweme: top.aweme_id, tier: d.tier })
+		return { ok: true, sent, tier: d.tier, aweme: top.aweme_id, why: sent ? '' : ((r && (r.error || r.stage)) || '发失败了') }
+	}
+
 	let picksTask = null
 	const startPicksCollect = () => {
 		if (picksTask) return picksTask
@@ -245,7 +282,8 @@ export function apply(ctx, config) {
 			try {
 				const st = readSettings()
 				const csv = (s) => String(s || '').split(/[,，\s]+/).map((x) => x.trim()).filter(Boolean)
-				const n = Math.min(Math.max(Number(st.count) || 12, 1), 50)
+				/* 「每轮看几个」是用户视角的数字；feed 的 count/rounds 是实现细节，别让他去理解两层。 */
+				const n = Math.min(Math.max(Number(st.scanPerRound) || Number(st.count) || 12, 1), 50)
 				const r = await run(['feed',
 					'--count', String(n),
 					'--rounds', String(Math.min(Math.max(Number(st.rounds) || 3, 1), 6)),
@@ -270,7 +308,11 @@ export function apply(ctx, config) {
 					cand.push({ ...c, score: j.score, why: j.why })
 				}
 				save(mergeItems(load().items, cand))
-				return { ok: true, picked: cand.length, fetched: r.fetched }
+				/* 刷完一轮，挑最好的那条「叫一下主人」——分享卡片 或 评论区 @。
+				 * 叫不叫、叫几次、用哪一档，全看设置里的通知预算；不许绕过它。 */
+				let told = null
+				try { told = await tellOwner(cand, st) } catch { /* 叫不动也不影响入库 */ }
+				return { ok: true, picked: cand.length, fetched: r.fetched, told }
 			} finally {
 				picksTask = null
 			}
