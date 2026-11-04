@@ -312,11 +312,12 @@ export function apply(ctx, config) {
 			try {
 				const st = readSettings()
 				const csv = (s) => String(s || '').split(/[,，\s]+/).map((x) => x.trim()).filter(Boolean)
-				/* 「每轮看几个」是用户视角的数字；feed 的 count/rounds 是实现细节，别让他去理解两层。 */
-				const n = Math.min(Math.max(Number(st.scanPerRound) || Number(st.count) || 12, 1), 50)
+				/* 「每轮看几个」是用户视角的数字；feed 内部自己按条数反推翻几页，
+				 * 用户不用再理解 count / rounds 两层参数。每条之间歇 scanGap 秒。 */
+				const n = Math.min(Math.max(Number(st.scanPerRound) || 20, 1), 50)
 				const r = await run(['feed',
 					'--count', String(n),
-					'--rounds', String(Math.min(Math.max(Number(st.rounds) || 3, 1), 6)),
+					'--gap', String(Number(st.scanGap) || 0),
 					'--limit', String(n),
 					'--mark-seen',
 				], { timeout: 300000 })
@@ -488,7 +489,7 @@ export function apply(ctx, config) {
 						const pick = (v, d) => (v == null || String(v).trim() === '' ? d : String(v))
 						const args = ['feed',
 							'--count', String(Math.min(num(body.count, st.scanPerRound || 20), 50)),
-							'--rounds', String(Math.min(num(body.rounds, st.scanRounds || 3), 6)),
+							'--gap', String(num(body.gap, st.scanGap || 0)),
 							'--limit', String(Math.min(num(body.limit, 12), 50))]
 						const minSec = num(body.minSec, st.minSec)
 						const maxSec = num(body.maxSec, st.maxSec)

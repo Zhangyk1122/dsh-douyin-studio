@@ -519,7 +519,7 @@ try {
 		const block = csv(argOf('--block') || process.env.DOUYIN_STUDIO_BLOCKWORDS || '')
 		const r = await feed.browse({
 			count: numOf('--count', envNum('DOUYIN_STUDIO_FEED_COUNT', 20)),
-			rounds: numOf('--rounds', envNum('DOUYIN_STUDIO_FEED_ROUNDS', 3)),
+			gapMs: numOf('--gap', envNum('DOUYIN_STUDIO_FEED_GAP', 0)) * 1000,
 			allow, block,
 			minSec: numOf('--min-sec', envNum('DOUYIN_STUDIO_FEED_MIN_SEC', 5)),
 			maxSec: numOf('--max-sec', envNum('DOUYIN_STUDIO_FEED_MAX_SEC', 180)),

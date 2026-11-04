@@ -34,7 +34,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
     const API = '/api/douyin-studio'
-    const PANEL_BUILD = 33
+    const PANEL_BUILD = 34
     const { useState, useEffect, useRef, useCallback } = React
 
     /* ── 样式 ────────────────────────────────────────────────────────────
@@ -634,6 +634,7 @@ window.__ModuleLoader__.load({
       { k: 'blockKeywords', label: '屏蔽词', ph: '命中就跳过' },
       { g: '刷视频' },
       { k: 'scanPerRound', label: '每轮看几个', ph: '10', type: 'number', min: 0, max: 50 },
+      { k: 'scanGap', label: '每看完一条歇几秒', ph: '6', type: 'number', min: 0, max: 60 },
       { k: 'minSec', label: '最短秒数', ph: '0 = 不限', type: 'number', min: 0, max: 600 },
       { k: 'maxSec', label: '最长秒数', ph: '0 = 不限', type: 'number', min: 0, max: 600 },
       { k: 'minDigg', label: '最低点赞', ph: '0 = 不限', type: 'number', min: 0, step: 100 },
@@ -642,9 +643,6 @@ window.__ModuleLoader__.load({
       { k: 'scanFrom', label: '从几点开始', ph: '9', type: 'number', min: 0, max: 23 },
       { k: 'scanTo', label: '到几点结束', ph: '22', type: 'number', min: 0, max: 23 },
       { g: '时间' },
-      /* 每天投递：几条 + 几点。0 条就是不开。 */
-      { k: 'digestPerDay', label: '每天发我几条视频', ph: '0 = 不发', type: 'number', min: 0, max: 5 },
-      { k: 'digestAt', label: '几点发视频', ph: '21:00' },
       { k: 'quietFrom', label: '静音从', ph: 'HH:MM' },
       { k: 'quietTo', label: '静音到', ph: 'HH:MM' },
       /* 谷时：这些动作每步都过模型，白天跑等于按原价买流程。空着 = 不限制。 */
@@ -756,7 +754,7 @@ window.__ModuleLoader__.load({
       {
         k: 'autoDm', icon: 'send', label: '回私信',
         desc: '有新私信时自己接一句；认不出是谁就先查名字，查不到就不发',
-        knobs: [{ k: 'dmPerRun', label: '每轮几条', type: 'number' }],
+        knobs: [{ k: 'replyMaxPerRound', label: '每轮几条', type: 'number' }],
       },
       {
         k: 'autoComment', icon: 'comment', label: '回评论',
