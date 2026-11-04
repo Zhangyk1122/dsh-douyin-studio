@@ -34,7 +34,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
     const API = '/api/douyin-studio'
-    const PANEL_BUILD = 31
+    const PANEL_BUILD = 32
     const { useState, useEffect, useRef, useCallback } = React
 
     /* ── 样式 ────────────────────────────────────────────────────────────
@@ -127,6 +127,21 @@ window.__ModuleLoader__.load({
 [data-dys-view]::-webkit-scrollbar-thumb{border-radius:999px;background:color-mix(in oklab, currentColor 16%, transparent);}
 [data-dys-view]::-webkit-scrollbar-thumb:hover{background:color-mix(in oklab, currentColor 26%, transparent);}
 [data-dys-view]::-webkit-scrollbar-track{background:transparent;}
+/* 主人身份那一格：红绿灯 + 一句为什么。
+   颜色只表状态 —— 绿=认到了，红=没认到（并说明是没填、没聊过还是重名）。 */
+[data-dys-own]{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;
+  background:var(--dys-fill2);border:1px solid var(--dys-line);}
+[data-dys-own][data-level="green"]{border-color:color-mix(in oklab, var(--dys-ok) 50%, var(--dys-line));
+  background:color-mix(in oklab, var(--dys-ok) 9%, var(--dys-fill2));}
+[data-dys-own][data-level="red"]{border-color:color-mix(in oklab, var(--dys-bad) 50%, var(--dys-line));
+  background:color-mix(in oklab, var(--dys-bad) 9%, var(--dys-fill2));}
+[data-dys-dot]{flex:0 0 9px;width:9px;height:9px;border-radius:50%;background:var(--dys-dim);}
+[data-dys-own][data-level="green"] [data-dys-dot]{background:var(--dys-ok);box-shadow:0 0 0 3px color-mix(in oklab, var(--dys-ok) 22%, transparent);}
+[data-dys-own][data-level="red"] [data-dys-dot]{background:var(--dys-bad);box-shadow:0 0 0 3px color-mix(in oklab, var(--dys-bad) 22%, transparent);}
+[data-dys-own] > div{flex:1 1 auto;min-width:0;}
+[data-dys-own] b{font-size:12px;font-weight:620;}
+[data-dys-own] span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
 /* 设置卡内部四页 */
 [data-dys-tabs]{display:flex;gap:2px;padding:2px;border-radius:10px;background:var(--dys-fill2);}
 [data-dys-tab]{flex:1 1 0;appearance:none;cursor:pointer;font:inherit;font-size:11.5px;line-height:1.5;
@@ -674,6 +689,27 @@ window.__ModuleLoader__.load({
           if (r && r.ok) onSaved && onSaved(r.settings)
         } catch (e) { setNote('没存上：' + String((e && e.message) || e)) }
       }
+      /* 主人身份：点「查一下」才真去查 —— 拉会话、必要时抄一遍昵称表，只读不发消息。
+       * 绿灯 = 这个号认到了（uid 在会话里，或昵称唯一对上）；红灯会带原因。 */
+      const [own, setOwn] = useState(null)
+      const [ownBusy, setOwnBusy] = useState(false)
+      const checkOwner = async () => {
+        if (!v) return
+        setOwnBusy(true); setOwn(null)
+        try {
+          const r = await jpost('/owner/verify', { nick: v.ownerNick || '', uid: v.ownerUid || '' })
+          setOwn(r || { level: 'red', why: '没拿到结果' })
+        } catch (e) { setOwn({ level: 'red', why: String((e && e.message) || e) }) }
+        finally { setOwnBusy(false) }
+      }
+      const ownNode = h('div', { 'data-dys-own': '', 'data-level': (own && own.level) || 'idle' },
+        h('i', { 'data-dys-dot': '' }),
+        h('div', null,
+          h('b', null, own ? (own.level === 'green' ? '认到了' : '没认到') : '还没查'),
+          h('span', { 'data-dys-xs': '', 'data-dys-dim': '' },
+            own ? (own.why || '') : '查一下：它去会话和昵称表里找这个号，只读，不发消息')),
+        h(Btn, { label: own ? '再查' : '查一下', icon: 'eye', busy: ownBusy, busyLabel: '查…', disabled: !v, onClick: checkOwner }))
+
       return h(Card, {
         title: '机器人设置', icon: 'sliders', kind: 'form',
         sub: '存了就会传给后台命令',
@@ -684,6 +720,7 @@ window.__ModuleLoader__.load({
         loading && !v
           ? h('div', { 'data-dys-col': '', style: { gap: '6px' } }, [0, 1, 2].map((i) => h('div', { key: i, 'data-dys-skel': '' })))
           : null,
+        v ? ownNode : null,
         v
           ? h('div', { 'data-dys-tabs': '' },
             SETTING_GROUPS.map((g) => h('button', {
@@ -1395,30 +1432,20 @@ window.__ModuleLoader__.load({
         err ? h(ErrLine, { text: err }) : null)
     }
 
-    /* ── 刷视频 ───────────────────────────────────────────────────────── */
-    const FEED_FIELDS = [
-      { k: 'minSec', label: '最短秒数', ph: '0 = 不限' },
-      { k: 'maxSec', label: '最长秒数', ph: '0 = 不限' },
-      { k: 'allow', label: '只要这些词', ph: '逗号分隔' },
-      { k: 'block', label: '不要这些词', ph: '命中就跳过' },
-    ]
-
-    const Feed = ({ data, err, busy, onRun, f, setF, onOpen }) => {
+    /* ── 刷视频 ─────────────────────────────────────────────────────────
+     * 这里**没有输入框**：条件只在「设置 → 刷视频」那页改，也只在那儿存。
+     * 之前两边都能填，改一边另一边不认，主人说「重复」，所以砍掉这一份。 */
+    const Feed = ({ data, err, busy, onRun, onOpen }) => {
       const items = (data && data.items) || []
       const dropped = (data && data.dropped) || {}
       const srcLabel = data
-        ? (data.source === 'search' ? '按你的关键词搜的' : '推荐流（没设关键词）')
-        : '按关键词挑一批，只读不点赞'
+        ? (data.source === 'search' ? '按你设置里的关键词搜的' : '推荐流（没设关键词）')
+        : '按设置里的条件刷一批，只读不点赞'
       return h(Card, {
         title: '刷视频', icon: 'film',
         sub: data ? (srcLabel + ' · 抓 ' + num(data.fetched) + ' 留 ' + num(data.kept)) : srcLabel,
         tools: h(Btn, { label: '再刷一遍', icon: 'film', busy, busyLabel: '刷…', onClick: onRun }),
       },
-        h('div', { 'data-dys-formgrid': '' },
-          FEED_FIELDS.map((fd) => h(Field, {
-            key: fd.k, f: fd, v: f[fd.k],
-            onChange: (k, val) => setF({ ...f, [k]: val }),
-          }))),
         items.length
           ? h('div', { 'data-dys-list': '' }, items.slice(0, 6).map((it, i) => h('div', { key: i, 'data-dys-li': '' },
             h('span', { 'data-dys-dot': '', 'data-accent': '' }),
@@ -1545,7 +1572,6 @@ window.__ModuleLoader__.load({
       const [busyTag, setBusyTag] = useState('')
       const [msg, setMsg] = useState(null)
       const [savingTrend, setSavingTrend] = useState(false)
-      const [feedF, setFeedF] = useState({ minSec: '', maxSec: '', allow: '', block: '' })
       const [feedData, setFeedData] = useState(null)
       const [feedErr, setFeedErr] = useState('')
       const [feedBusy, setFeedBusy] = useState(false)
@@ -1680,10 +1706,8 @@ window.__ModuleLoader__.load({
 
       const runFeed = async () => {        setFeedBusy(true); setFeedErr('')
         try {
-          const body = { count: 12, rounds: 3, allow: feedF.allow, block: feedF.block, limit: 8 }
-          if (String(feedF.minSec).trim()) body.minSec = Number(feedF.minSec) || 0
-          if (String(feedF.maxSec).trim()) body.maxSec = Number(feedF.maxSec) || 0
-          const r = await jpost('/feed', body)
+          /* 不传条件 —— 后端回落到「设置 → 刷视频」里存的那份。 */
+          const r = await jpost('/feed', { count: 12, rounds: 3, limit: 8 })
           if (r && r.ok !== false) setFeedData(r)
           else setFeedErr((r && (r.error || r.why)) || '没刷出来')
         } catch (e) { setFeedErr(String((e && e.message) || e)) }
@@ -1707,8 +1731,7 @@ window.__ModuleLoader__.load({
         onPost: (path, body) => post(path, path, body, () => load(['/watch', '/duty', '/queue'])),
       })
       const nodeFeed = h(Feed, {
-        data: feedData, err: feedErr, busy: feedBusy, onRun: runFeed,
-        f: feedF, setF: setFeedF, onOpen: openInBot,
+        data: feedData, err: feedErr, busy: feedBusy, onRun: runFeed, onOpen: openInBot,
       })
       const nodeSettings = h(SettingsCard, {
         data: get('/settings'), err: errOf('/settings'), loading: loading['/settings'],

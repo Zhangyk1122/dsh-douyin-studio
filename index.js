@@ -18,6 +18,7 @@ import { registerTools } from './lib/tools.mjs'
 import * as WATCH from './lib/watch.mjs'
 import * as DUTY from './lib/duty.mjs'
 import * as AUTOPILOT from './lib/autopilot.mjs'
+import * as OWNER from './lib/owner.mjs'
 import { execJson } from './lib/proc.mjs'
 import { checkOrigin } from './lib/guard.mjs'
 import { serveInbox, DEFAULT_TTL } from './lib/cache.mjs'
@@ -477,14 +478,23 @@ export function apply(ctx, config) {
 					}
 					if (req.method === 'POST' && p === '/feed') {
 						const body = await readBody(req)
+						/* 前端不再带参数了（面板上只有一处能改，就是「设置 → 刷视频」）。
+						 * 但 CLI 和老调用还照旧传参数 —— 传了就用传的，没传才回落到设置。 */
+						const st = readSettings()
+						const num = (v, d) => (v == null || String(v).trim() === '' ? d : Number(v) || 0)
+						const pick = (v, d) => (v == null || String(v).trim() === '' ? d : String(v))
 						const args = ['feed',
-							'--count', String(Math.min(Number(body.count) || 20, 50)),
-							'--rounds', String(Math.min(Number(body.rounds) || 3, 6)),
-							'--limit', String(Math.min(Number(body.limit) || 12, 50))]
-						if (body.minSec != null && Number(body.minSec) > 0) args.push('--min-sec', String(Number(body.minSec)))
-						if (body.maxSec != null && Number(body.maxSec) > 0) args.push('--max-sec', String(Number(body.maxSec)))
-						if (body.allow) args.push('--allow', String(body.allow))
-						if (body.block) args.push('--block', String(body.block))
+							'--count', String(Math.min(num(body.count, st.scanPerRound || 20), 50)),
+							'--rounds', String(Math.min(num(body.rounds, st.scanRounds || 3), 6)),
+							'--limit', String(Math.min(num(body.limit, 12), 50))]
+						const minSec = num(body.minSec, st.minSec)
+						const maxSec = num(body.maxSec, st.maxSec)
+						const allow = pick(body.allow, st.keywords)
+						const block = pick(body.block, st.blockKeywords)
+						if (minSec > 0) args.push('--min-sec', String(minSec))
+						if (maxSec > 0) args.push('--max-sec', String(maxSec))
+						if (allow) args.push('--allow', String(allow))
+						if (block) args.push('--block', String(block))
 						if (body.markSeen) args.push('--mark-seen')
 						const r = await run(args, { timeout: 300000 })
 						return sendJson(res, 200, r)
@@ -584,6 +594,22 @@ export function apply(ctx, config) {
 							AUTOPILOT.configure({ runCli: run })
 						}
 						return sendJson(res, r.ok ? 200 : 500, { ...r, live: r.ok, hint: r.ok ? '已保存，定时器按新值重开了' : '' })
+					}
+
+					/* ── 主人身份校验：面板上那颗红绿灯 ─────────────────────────
+					 * 只读：拉一遍会话 + 必要时抄一遍昵称表，不发任何消息。
+					 * 绿灯才算「认到了这个号」，红灯要带理由（没填 / 没聊过 / 重名 / 号是机器人自己）。 */
+					if (req.method === 'POST' && p === '/owner/verify') {
+						const body = await readBody(req)
+						const st = readSettings()
+						const nick = String((body && body.nick) != null ? body.nick : st.ownerNick || '').trim()
+						const uid = String((body && body.uid) != null ? body.uid : st.ownerUid || '').trim()
+						try {
+							const r = await OWNER.verify({ nick, uid })
+							return sendJson(res, 200, { ok: true, ...r })
+						} catch (e) {
+							return sendJson(res, 200, { ok: false, level: 'red', why: '查的时候出错了：' + String((e && e.message) || e) })
+						}
 					}
 
 					/* ── 在「机器人的浏览器」里打开（不是系统默认浏览器） ─────────
