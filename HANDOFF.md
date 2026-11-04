@@ -446,3 +446,48 @@ A1 的正确性只能靠**证明**，不能靠感觉 —— 所以它比 A2 多�
 
 `client.js` 1700 → **1800**（理由写在 `tools/check.mjs` 的 `BUDGET` 注释里）。
 `node tools/check.mjs` 仍是 PASS：66 文件解析通过，20 个测试文件 283 例全绿。
+
+---
+
+## 14. 2026-11-04 深夜：按 PLAN 做 T1 / T2 / T4
+
+施工图是 `docs/PLAN-for-dsh.md`（303 行）。这一夜完成三件，顺序 T1 → T2 → T4；
+T3（点赞/收藏/关注）跳过了 —— 它要人批准，而且改的是 `budget.mjs` 的额度数字。
+
+### T1 · 口味画像 `lib/taste.mjs`（147 行，新）
+
+- 纯读：likes / publishes / ledger / picks(saved·liked)，不新增任何采集。
+- `evidence < 20` 直接返回空结构 —— **样本不够就不许有结论**，有测试钉着。
+- 身份只认 `sec_uid`；`ledger` 没有 sec_uid，所以它只贡献 hours 与 evidence，不贡献作者。
+  这不是偷懒：拿昵称当 key，改名就断，比不认更糟。
+- 半衰期 14 天（`0.5 ** (days/14)`）；权重：自己发 1.5 > 存 1.2 > 赞 1.1 > 赞过 1.0。
+- 已接进 `index.js` 的 `tasteNow()`：每次「挑」收集时重算（几十毫秒，不起浏览器），
+  `judge()` 的 `ctx.authors` / `ctx.tags` 终于有内容了。**b28 里"还没接的两处"第一处已关。**
+
+### T2 · 通知预算 `lib/notify.mjs`（新，约 75 行）
+
+- 三档：入库 0.4（不打扰）/ @ 0.75 / 私信 0.9 且"最近 24h 搜过同类"。
+- `calledToday >= perDay` 必拒 —— `tests/notify.test.mjs` 有硬验收。
+- `maxTier` 默认 `at`：**用户没明确允许，就不发私信**。测试里专门钉了这条。
+- ⚠️ 命名冲突已解决：原来的 `lib/notify.mjs` 是 Windows Toast，已 `git mv` 成 `lib/toast.mjs`
+  （只有 `lib/watch.mjs` 引用，已同步改）。
+- `settings.mjs` 加了三个字段：`notifyPerDay`(2) / `notifyTier`('at') / `notifyQuiet`(true)。
+  **还没接线**：面板上没有这三个输入框，`allowNotify()` 目前只有测试在调。
+
+### T4 · 界面骨架（b29）
+
+- 一级 3 区（挑 / 待办 / 今天）+「更多」二级（自主·设置·刷视频·额度·后台·趋势）。**只有两层。**
+- `[data-dys-view]` 改成 `height:clamp(320px,46vh,480px); overflow:auto`，去掉卡片内滚 ——
+  切 tab 页面不跳，全页只有一个滚动条。上限没用 58vh：内容短时底下会空一大片。
+- 卡片按 `data-kind` 分三档密度：list（默认）/ form（设置、自主）/ metric（额度、趋势）。
+- tab 角标：挑 = 新候选数，待办 = 收件箱条数。拉不到就空着 —— 不显示假数字。
+- 体量：`client.js` 1800 → **1880**（理由在 `check.mjs` 的 BUDGET 注释里）。
+
+### 现在的数
+
+`node tools/check.mjs` PASS：70 文件、22 个测试文件、**309 例**全绿；
+`client.js 1789/1880`、`index.js 804/1250`、最大 lib 742/760。
+
+### 下一步（按 PLAN 顺序）
+
+T5 · `lib/schedule.mjs`（≤80 行，跨午夜窗口要有测试）→ T6 · 事件驱动 → 最后 T3（要人批准）。
