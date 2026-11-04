@@ -34,7 +34,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
     const API = '/api/douyin-studio'
-    const PANEL_BUILD = 28
+    const PANEL_BUILD = 29
     const { useState, useEffect, useRef, useCallback } = React
 
     /* ── 样式 ────────────────────────────────────────────────────────────
@@ -89,16 +89,24 @@ window.__ModuleLoader__.load({
 /* ── 卡片：只有两级。主卡（收件箱）提亮一档，其余一律同款，不靠彩线区分 ── */
 [data-dys-card]{position:relative;display:flex;flex-direction:column;gap:12px;min-width:0;padding:15px 17px 16px;border-radius:var(--dys-r);border:1px solid var(--dys-line);background:var(--dys-fill);}
 [data-dys-card][data-lead]{background:var(--dys-lead);border-color:var(--dys-line2);}
-/* ── 分段控件：八个区，一次只画一个 ── */
+/* 三种卡三种密度：列表要挤（多行），表单要松（手指点得准），数字要立（一眼看大小） */
+[data-dys-card][data-kind="form"]{padding:16px 18px 17px;gap:14px;}
+[data-dys-card][data-kind="metric"]{padding:18px 18px 16px;gap:14px;}
+/* ── 分段控件：一级三件事 + 更多（只有两层，不许第三层）── */
 [data-dys-seg]{display:flex;gap:3px;flex-wrap:wrap;padding:3px;border-radius:12px;background:var(--dys-fill2);border:1px solid var(--dys-line);}
+[data-dys-seg][data-dys-seg2]{margin-top:-6px;background:transparent;border:0;padding:0 3px;}
 [data-dys-seg] > button{flex:0 0 auto;appearance:none;cursor:pointer;font:inherit;font-size:12px;line-height:1.5;
   padding:5px 12px;border:0;border-radius:9px;background:transparent;color:var(--dys-dim);white-space:nowrap;
   transition:color .12s ease, background .12s ease, box-shadow .12s ease;}
 [data-dys-seg] > button:hover{color:var(--dys-ink);background:color-mix(in oklab, var(--dys-ink) 5%, transparent);}
 [data-dys-seg] > button[data-on]{background:var(--dys-fill);color:var(--dys-ink);font-weight:600;
   box-shadow:0 1px 2px rgba(0,0,0,.16), inset 0 0 0 1px var(--dys-line2);}
-/* 内容区封顶一屏：列表在卡片里滚，页面本身不跟着长 */
-[data-dys-view] > *{max-height:min(72vh,640px);overflow:auto;}
+/* 角标：有数字才亮，没数字就安静 */
+[data-dys-seg] i{font-style:normal;font-size:10px;line-height:1;padding:1px 4px;margin-left:5px;border-radius:6px;
+  background:color-mix(in oklab, var(--dys-blue) 22%, transparent);color:var(--dys-ink);}
+/* 内容区定高：切 tab 页面不跳，全局只有一个滚动条（就在这个框里）。
+   上限跟着屏高走，但别太大 —— 内容短的时候底下会空出一大片。 */
+[data-dys-view]{height:clamp(320px,46vh,480px);overflow:auto;border-radius:12px;}
 /* 设置卡内部四页 */
 [data-dys-tabs]{display:flex;gap:2px;padding:2px;border-radius:10px;background:var(--dys-fill2);}
 [data-dys-tab]{flex:1 1 0;appearance:none;cursor:pointer;font:inherit;font-size:11.5px;line-height:1.5;
@@ -494,8 +502,8 @@ window.__ModuleLoader__.load({
       }, paths.map((d, i) => h('path', { key: i, d })))
     }
 
-    const Card = ({ title, sub, lead, tools, icon, children }) =>
-      h('section', { 'data-dys-card': '', 'data-lead': lead ? '' : undefined },
+    const Card = ({ title, sub, lead, tools, icon, kind, children }) =>
+      h('section', { 'data-dys-card': '', 'data-kind': kind || 'list', 'data-lead': lead ? '' : undefined },
         (title || tools) ? h('div', { 'data-dys-head': '' },
           h('div', { 'data-dys-title': '' },
             icon ? h('span', { 'data-dys-ico': '' }, Ico({ name: icon, size: 13 })) : null,
@@ -634,7 +642,7 @@ window.__ModuleLoader__.load({
         } catch (e) { setNote('没存上：' + String((e && e.message) || e)) }
       }
       return h(Card, {
-        title: '机器人设置', icon: 'sliders',
+        title: '机器人设置', icon: 'sliders', kind: 'form',
         sub: '存了就会传给后台命令',
         tools: h('div', { 'data-dys-row': '' },
           note ? h('span', { 'data-dys-xs': '', 'data-dys-dim': '' }, note) : null,
@@ -808,7 +816,7 @@ window.__ModuleLoader__.load({
       const onCount = AUTO_ROWS.filter((r) => v[r.k]).length
 
       return h(Card, {
-        title: '自主执行', icon: 'bolt',
+        title: '自主执行', icon: 'bolt', kind: 'form',
         sub: onCount ? (onCount + ' 项开着 · 它自己判断') : '现在全关着，只看不动',
         tools: note ? h('span', { 'data-dys-xs': '', 'data-dys-dim': '' }, note) : null,
       },
@@ -934,7 +942,7 @@ window.__ModuleLoader__.load({
       const msgs = (data && data.messages) || {}
       const rows = ['comment', 'dm', 'at', 'own', 'publish']
       return h(Card, {
-        title: '消息额度', icon: 'gauge', sub: '五个出口共用一个总闸',
+        title: '消息额度', icon: 'gauge', kind: 'metric', sub: '五个出口共用一个总闸',
         tools: h(Btn, { label: '刷新', icon: 'refresh', ghost: true, busy: loading, busyLabel: '读…', onClick: onReload }),
       },
         (data && data.broken)
@@ -1331,7 +1339,7 @@ window.__ModuleLoader__.load({
         return x.toFixed(1) + ',' + y.toFixed(1)
       }).join(' ')
       return h(Card, {
-        title: '粉丝趋势', icon: 'chart',
+        title: '粉丝趋势', icon: 'chart', kind: 'metric',
         sub: rows.length ? ('最近 ' + rows.length + ' 天') : '',
         tools: h(Btn, { label: '记今天一笔', ghost: true, busy: saving, busyLabel: '记…', onClick: onSave }),
       },
@@ -1512,6 +1520,19 @@ window.__ModuleLoader__.load({
       const [view, setView] = useState(() => {
         try { return localStorage.getItem('dys-view') || 'picks' } catch (_) { return 'picks' }
       })
+      const [moreOpen, setMoreOpen] = useState(false)
+      /* 角标：待办几条要回、挑几条是新的。拉不到就空着 —— 宁可不显示，也不显示假数字。 */
+      const [badges, setBadges] = useState({})
+      useEffect(() => {
+        let dead = false
+        Promise.all([jget('/picks'), jget('/inbox?limit=8')]).then(([p, i]) => {
+          if (dead) return
+          const picks = ((p || {}).items || []).filter((x) => x && x.state === 'new').length
+          const inbox = ((((i || {}).data || {}).items) || []).length
+          setBadges({ picks, inbox })
+        }).catch(() => {})
+        return () => { dead = true }
+      }, [])
 
       const base = ['/status', '/budget', '/config', '/watch', '/duty', '/queue', '/settings', '/autopilot', '/trend?days=14', '/publishes?n=30', '/ledger?n=40', '/errors?n=20']
 
@@ -1655,12 +1676,19 @@ window.__ModuleLoader__.load({
         loading: loading['/ledger?n=40'] || loading['/publishes?n=30'] || loading['/errors?n=20'],
       })
 
-      /* 一次只画一张卡 —— 页面高度就定住了，不会越用越长。
-       * 八张卡一张都不少，只是不再同时挂在 DOM 上。 */
-      const VIEWS = [['picks', '挑'], ['inbox', '待办'], ['digest', '今天'], ['auto', '自主'], ['settings', '设置'],
-        ['feed', '刷视频'], ['budget', '额度'], ['ops', '后台'], ['trend', '趋势']]
-      const viewNode = { picks: h(Picks), inbox: nodeInbox, digest: nodeDigest, auto: nodeAuto, settings: nodeSettings,
-        feed: nodeFeed, budget: nodeBudget, ops: nodeOps, trend: nodeTrend }[view] || nodeInbox
+      /* 一级三件事，其余收进「更多」—— 只有两层，不许第三层（PLAN §2.2） */
+      const VIEWS = [['picks', '挑'], ['inbox', '待办'], ['digest', '今天']]
+      const MORE = [['auto', '自主'], ['settings', '设置'], ['feed', '刷视频'],
+        ['budget', '额度'], ['ops', '后台'], ['trend', '趋势']]
+      const viewNode = {
+        picks: h(Picks), inbox: nodeInbox, digest: nodeDigest, auto: nodeAuto, settings: nodeSettings,
+        feed: nodeFeed, budget: nodeBudget, ops: nodeOps, trend: nodeTrend,
+      }[view] || nodeInbox
+      const inMore = MORE.some(([k]) => k === view)
+      const tab = (id, label) => h('button', {
+        key: id, type: 'button', 'data-on': view === id ? '' : undefined,
+        onClick: () => { setView(id); try { localStorage.setItem('dys-view', id) } catch (_) {} },
+      }, label, badges[id] ? h('i', null, badges[id]) : null)
 
       return h('div', {
         'data-dys': '', 'data-theme': theme, 'data-cols': cols, ref: rootRef,
@@ -1671,15 +1699,15 @@ window.__ModuleLoader__.load({
           refreshing, onRefresh: () => { reloadAll(); load(['/inbox?limit=8']) },
         }),
 
-        /* 八个区一次只画一个：页面高度就定住了，不会越用越长。 */
+        /* 一级三件 + 更多；当前落在二级区时「更多」自己亮着，刷新也不会看丢 */
         h('div', { 'data-dys-seg': '' },
-          VIEWS.map(([id, label]) => h('button', {
-            key: id, type: 'button', 'data-on': view === id ? '' : undefined,
-            onClick: () => {
-              setView(id)
-              try { localStorage.setItem('dys-view', id) } catch (_) {}
-            },
-          }, label))),
+          VIEWS.map(([id, l]) => tab(id, l)),
+          h('button', {
+            key: 'more', type: 'button', 'data-on': inMore ? '' : undefined,
+            onClick: () => setMoreOpen((v) => !v),
+          }, '更多')),
+        moreOpen || inMore ? h('div', { 'data-dys-seg': '', 'data-dys-seg2': '' },
+          MORE.map(([id, l]) => tab(id, l))) : null,
 
         h('div', { 'data-dys-view': '' }, viewNode),
 
