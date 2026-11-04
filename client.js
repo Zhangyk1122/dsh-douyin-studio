@@ -93,7 +93,9 @@ window.__ModuleLoader__.load({
 [data-dys-card][data-kind="form"]{padding:16px 18px 17px;gap:14px;}
 [data-dys-card][data-kind="metric"]{padding:18px 18px 16px;gap:14px;}
 /* ── 分段控件：一级三件事 + 更多（只有两层，不许第三层）── */
-[data-dys-seg]{display:flex;gap:3px;flex-wrap:wrap;padding:3px;border-radius:12px;background:var(--dys-fill2);border:1px solid var(--dys-line);}
+/* fit-content：只有四个片段却铺满整行，右边会空出一大片，像没做完。 */
+[data-dys-seg]{display:flex;gap:3px;flex-wrap:wrap;width:fit-content;max-width:100%;
+  padding:3px;border-radius:12px;background:var(--dys-fill2);border:1px solid var(--dys-line);}
 [data-dys-seg][data-dys-seg2]{margin-top:-6px;background:transparent;border:0;padding:0 3px;}
 [data-dys-seg] > button{flex:0 0 auto;appearance:none;cursor:pointer;font:inherit;font-size:12px;line-height:1.5;
   padding:5px 12px;border:0;border-radius:9px;background:transparent;color:var(--dys-dim);white-space:nowrap;
@@ -101,12 +103,28 @@ window.__ModuleLoader__.load({
 [data-dys-seg] > button:hover{color:var(--dys-ink);background:color-mix(in oklab, var(--dys-ink) 5%, transparent);}
 [data-dys-seg] > button[data-on]{background:var(--dys-fill);color:var(--dys-ink);font-weight:600;
   box-shadow:0 1px 2px rgba(0,0,0,.16), inset 0 0 0 1px var(--dys-line2);}
-/* 角标：有数字才亮，没数字就安静 */
-[data-dys-seg] i{font-style:normal;font-size:10px;line-height:1;padding:1px 4px;margin-left:5px;border-radius:6px;
-  background:color-mix(in oklab, var(--dys-blue) 22%, transparent);color:var(--dys-ink);}
+/* 角标：有数字才亮，没数字就安静。蓝字蓝底 —— 比实心块轻，比纯数字显眼。 */
+[data-dys-seg] i{font-style:normal;font-size:10px;line-height:1;padding:2px 4px;margin-left:5px;border-radius:6px;
+  background:color-mix(in oklab, var(--dys-blue) 15%, transparent);
+  color:color-mix(in oklab, var(--dys-blue) 88%, currentColor);}
 /* 内容区定高：切 tab 页面不跳，全局只有一个滚动条（就在这个框里）。
-   上限跟着屏高走，但别太大 —— 内容短的时候底下会空出一大片。 */
-[data-dys-view]{height:clamp(320px,46vh,480px);overflow:auto;border-radius:12px;}
+   上限跟着屏高走，但别太大 —— 内容短的时候底下会空出一大片。
+   卡片撑满这个框：宁可卡里留白，也不要卡外面出现一块「洞」。 */
+[data-dys-view]{height:clamp(300px,44vh,460px);overflow:auto;border-radius:12px;
+  scrollbar-width:thin;scrollbar-color:color-mix(in oklab, currentColor 22%, transparent) transparent;}
+[data-dys-view] > *{min-height:100%;}
+/* 只有真的滚起来了才淡出底部。不滚也淡 = 把卡片的底边擦掉，看着像缺一条边。 */
+[data-dys-view][data-more]{
+  -webkit-mask-image:linear-gradient(to bottom, #000 0, #000 calc(100% - 22px), transparent 100%);
+  mask-image:linear-gradient(to bottom, #000 0, #000 calc(100% - 22px), transparent 100%);}
+/* 表单 / 数字类不封顶：它们本来就短，撑到 300px 只是给卡里留一块空白。
+   列表类（挑 / 待办 / 今天 / 刷视频 / 后台）才需要定高 —— 那些是会越滚越长的。 */
+[data-dys-view][data-h="auto"]{height:auto;}
+[data-dys-view][data-h="auto"] > *{min-height:0;}
+[data-dys-view]::-webkit-scrollbar{width:8px;}
+[data-dys-view]::-webkit-scrollbar-thumb{border-radius:999px;background:color-mix(in oklab, currentColor 16%, transparent);}
+[data-dys-view]::-webkit-scrollbar-thumb:hover{background:color-mix(in oklab, currentColor 26%, transparent);}
+[data-dys-view]::-webkit-scrollbar-track{background:transparent;}
 /* 设置卡内部四页 */
 [data-dys-tabs]{display:flex;gap:2px;padding:2px;border-radius:10px;background:var(--dys-fill2);}
 [data-dys-tab]{flex:1 1 0;appearance:none;cursor:pointer;font:inherit;font-size:11.5px;line-height:1.5;
@@ -194,9 +212,10 @@ window.__ModuleLoader__.load({
 [data-dys-pickt]{font-size:12.5px;line-height:1.45;overflow:hidden;display:-webkit-box;
   -webkit-line-clamp:2;-webkit-box-orient:vertical;}
 [data-dys-pickm]{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;}
-/* 分数是元数据，靠右站 —— 贴在句子后面会被读成句子的一部分 */
-[data-dys-pickm] > [data-dys-tag]{margin-left:auto;}
 [data-dys-pickacts]{display:flex;align-items:center;gap:8px;flex:0 0 auto;}
+/* 「不要」得看得见 —— 默认 ghost 太淡，在这一屏它是个真实选项 */
+[data-dys-pickacts] [data-dys-btn][data-ghost]{font-size:14px;line-height:1;padding:4px 8px;
+  color:color-mix(in oklab, currentColor 70%, transparent);}
 [data-dys-btn][data-ghost]:hover{color:var(--dys-ink);background:var(--dys-fill2);}
 [data-dys-btn:disabled]{opacity:.4;cursor:default;}
 [data-dys-row]{display:flex;gap:7px;align-items:center;flex-wrap:wrap;}
@@ -1470,14 +1489,18 @@ window.__ModuleLoader__.load({
         tools: h(Btn, { label: '刷一批', icon: 'film', primary: !items.length, busy: spinning, busyLabel: '刷…', onClick: collect }),
       },
         items.length
-          ? h('div', null, items.slice(0, 8).map((it) => h('div', { key: it.aweme_id, 'data-dys-pick': '' },
+          ? h('div', null, items.slice(0, 8).map((it) => h('div', {
+            key: it.aweme_id, 'data-dys-pick': '',
+            /* 分数不进界面：0–1 的数字对「要不要看」没有帮助，列表本身已经按它排过序。
+             * 留在 title 里，排查时鼠标一停就能看到。 */
+            title: '匹配度 ' + num(it.score) + (it.source ? ' · 来自 ' + it.source : ''),
+          },
             h('div', { 'data-dys-pickmain': '' },
               h('div', { 'data-dys-pickt': '', title: it.desc || '' }, it.desc || '（没有文案）'),
               h('div', { 'data-dys-pickm': '' },
                 h('span', { 'data-dys-xs': '', 'data-dys-dim': '' },
                   (it.author || '?') + ' · ' + (num(it.duration_sec) || '—') + 's · 赞 ' + num(it.digg)),
-                h('span', { 'data-dys-xs': '', 'data-dys-dim': '' }, '· ' + (it.why || '')),
-                h('span', { 'data-dys-tag': '' }, String(num(it.score))))),
+                h('span', { 'data-dys-xs': '', 'data-dys-dim': '' }, '· ' + (it.why || '')))),
             h('div', { 'data-dys-pickacts': '' },
               h(Btn, {
                 label: armed === it.aweme_id ? '确认发' : '发我',
@@ -1521,6 +1544,22 @@ window.__ModuleLoader__.load({
         try { return localStorage.getItem('dys-view') || 'picks' } catch (_) { return 'picks' }
       })
       const [moreOpen, setMoreOpen] = useState(false)
+      /* 内容区是不是真的滚起来了。只用来决定「要不要淡出底边」——
+       * 不滚的时候也淡，会把卡片的底边框擦掉。
+       * 用 ResizeObserver 盯，不要每次渲染都读 scrollHeight：
+       * 那会在设置页打字时每键强制一次布局。 */
+      const viewRef = useRef(null)
+      const [overflowing, setOverflowing] = useState(false)
+      useEffect(() => {
+        const el = viewRef.current
+        if (!el || typeof ResizeObserver === 'undefined') return
+        const check = () => setOverflowing(el.scrollHeight > el.clientHeight + 4)
+        check()
+        const ro = new ResizeObserver(check)
+        ro.observe(el)
+        if (el.firstElementChild) ro.observe(el.firstElementChild)
+        return () => ro.disconnect()
+      }, [view])
       /* 角标：待办几条要回、挑几条是新的。拉不到就空着 —— 宁可不显示，也不显示假数字。 */
       const [badges, setBadges] = useState({})
       useEffect(() => {
@@ -1709,7 +1748,11 @@ window.__ModuleLoader__.load({
         moreOpen || inMore ? h('div', { 'data-dys-seg': '', 'data-dys-seg2': '' },
           MORE.map(([id, l]) => tab(id, l))) : null,
 
-        h('div', { 'data-dys-view': '' }, viewNode),
+        h('div', {
+          'data-dys-view': '', ref: viewRef,
+          'data-h': ['settings', 'budget', 'trend', 'ops'].includes(view) ? 'auto' : undefined,
+          'data-more': overflowing && !['settings', 'budget', 'trend', 'ops'].includes(view) ? '' : undefined,
+        }, viewNode),
 
         /* 动作结果：折起来，别糊脸 */
         msg ? h('div', {
