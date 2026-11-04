@@ -1,0 +1,20 @@
+# ============================================================================
+# dsh-douyin-studio —— DSH bundle patch（插件自带的挂载声明）
+# ============================================================================
+# 和 dsh-douyin-scroll 同一套规矩：包自己声明要往 profile 的配置树里插什么。
+# 装好之后，profile 只要在 `dsh.profile.bundles` 里列出本包名即生效。
+#
+# 组成顺序：每个 bundle 的 patch 按 `dsh.profile.bundles` 顺序叠
+#          → 再叠 profile 自己那一层的 cordis.patch.yml（只有那层是热重载）
+# 所以这里的 config 只是默认值；真正的用户配置写在 profile 的 patch 里
+# （`- id: douyin-studio` 那一条），设置页改的就是那份。
+# ============================================================================
+
+- insert:
+    - id: douyin-studio          # ⭐ 必须等于命名空间名（设置页 volatile 写入的前提）
+      name: dsh-douyin-studio
+      config:
+        cdpPort: 9334
+        profileDir: ""
+        autoOpen: true
+        perDay: 20
