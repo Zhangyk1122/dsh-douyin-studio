@@ -34,7 +34,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
     const API = '/api/douyin-studio'
-    const PANEL_BUILD = 29
+    const PANEL_BUILD = 30
     const { useState, useEffect, useRef, useCallback } = React
 
     /* ── 样式 ────────────────────────────────────────────────────────────
@@ -108,11 +108,13 @@ window.__ModuleLoader__.load({
   background:color-mix(in oklab, var(--dys-blue) 15%, transparent);
   color:color-mix(in oklab, var(--dys-blue) 88%, currentColor);}
 /* 内容区定高：切 tab 页面不跳，全局只有一个滚动条（就在这个框里）。
-   上限跟着屏高走，但别太大 —— 内容短的时候底下会空出一大片。
-   卡片撑满这个框：宁可卡里留白，也不要卡外面出现一块「洞」。 */
-[data-dys-view]{height:clamp(300px,44vh,460px);overflow:auto;border-radius:12px;
+   一张卡撑满；多张卡按 --dys-cols（根节点给的列数）排成网格 —— 宽屏两列，窄屏一列。 */
+[data-dys-view]{height:clamp(320px,46vh,480px);overflow:auto;border-radius:12px;
+  display:grid;grid-template-columns:repeat(var(--dys-cols,1),minmax(0,1fr));
+  align-content:start;gap:16px;
   scrollbar-width:thin;scrollbar-color:color-mix(in oklab, currentColor 22%, transparent) transparent;}
-[data-dys-view] > *{min-height:100%;}
+/* 只有一张卡的时候撑满（免得卡外露一块洞），并且横跨两列 */
+[data-dys-view] > *:only-child{min-height:100%;grid-column:1 / -1;}
 /* 只有真的滚起来了才淡出底部。不滚也淡 = 把卡片的底边擦掉，看着像缺一条边。 */
 [data-dys-view][data-more]{
   -webkit-mask-image:linear-gradient(to bottom, #000 0, #000 calc(100% - 22px), transparent 100%);
@@ -1401,7 +1403,7 @@ window.__ModuleLoader__.load({
       return h(Card, {
         title: '刷视频', icon: 'film',
         sub: data ? (srcLabel + ' · 抓 ' + num(data.fetched) + ' 留 ' + num(data.kept)) : srcLabel,
-        tools: h(Btn, { label: '刷一批', icon: 'film', busy, busyLabel: '刷…', onClick: onRun }),
+        tools: h(Btn, { label: '再刷一遍', icon: 'film', busy, busyLabel: '刷…', onClick: onRun }),
       },
         h('div', { 'data-dys-formgrid': '' },
           FEED_FIELDS.map((fd) => h(Field, {
@@ -1489,7 +1491,7 @@ window.__ModuleLoader__.load({
         sub: st
           ? '候选 ' + num(s.total) + ' 条 · 今天叫过 ' + num(s.called) + ' 次' + (st.refreshing ? ' · 正在刷…' : '')
           : '刷完的东西留在这儿，值得看的才叫你',
-        tools: h(Btn, { label: '刷一批', icon: 'film', primary: !items.length, busy: spinning, busyLabel: '刷…', onClick: collect }),
+        tools: h(Btn, { label: '找新的', icon: 'film', primary: !items.length, busy: spinning, busyLabel: '刷…', onClick: collect }),
       },
         items.length
           ? h('div', null, items.slice(0, 8).map((it) => h('div', {
@@ -1520,7 +1522,7 @@ window.__ModuleLoader__.load({
               })))))
           : h(Empty, {
             text: st ? '还没挑过 —— 刷一批，它会把值得看的留下' : '正在读候选库…',
-            action: st ? h(Btn, { label: '刷一批', onClick: collect, busy: spinning, busyLabel: '刷…' }) : null,
+            action: st ? h(Btn, { label: '找新的', onClick: collect, busy: spinning, busyLabel: '刷…' }) : null,
           }),
         h('div', { 'data-dys-xs': '', 'data-dys-dim': '' },
           '赞 / 收藏还没接，先用「发我」把值得的存在私信里。'),
@@ -1542,11 +1544,16 @@ window.__ModuleLoader__.load({
       const [forcingInbox, setForcingInbox] = useState(false)
       const rootRef = useRef(null)
       const [cols, setCols] = useState('2')
-      /* 当前看哪一区。记住上次停在哪儿；第一次打开停在「挑」（b28）。 */
+      /* 当前看哪一区。记住上次停在哪儿；旧版本的 tab 名（picks/inbox/digest）映射到新四区。 */
       const [view, setView] = useState(() => {
-        try { return localStorage.getItem('dys-view') || 'picks' } catch (_) { return 'picks' }
+        try {
+          const v = localStorage.getItem('dys-view') || 'today'
+          const alias = { picks: 'find', inbox: 'reply', digest: 'today', auto: 'reply', feed: 'find',
+            budget: 'today', ops: 'reply', trend: 'today' }
+          const n = alias[v] || v
+          return ['today', 'reply', 'find', 'settings'].includes(n) ? n : 'today'
+        } catch (_) { return 'today' }
       })
-      const [moreOpen, setMoreOpen] = useState(false)
       /* 内容区是不是真的滚起来了。只用来决定「要不要淡出底边」——
        * 不滚的时候也淡，会把卡片的底边框擦掉。
        * 用 ResizeObserver 盯，不要每次渲染都读 scrollHeight：
@@ -1563,15 +1570,15 @@ window.__ModuleLoader__.load({
         if (el.firstElementChild) ro.observe(el.firstElementChild)
         return () => ro.disconnect()
       }, [view])
-      /* 角标：待办几条要回、挑几条是新的。拉不到就空着 —— 宁可不显示，也不显示假数字。 */
+      /* 角标：回应=几条要回，找内容=几条新候选。拉不到就空着 —— 不显示假数字。 */
       const [badges, setBadges] = useState({})
       useEffect(() => {
         let dead = false
         Promise.all([jget('/picks'), jget('/inbox?limit=8')]).then(([p, i]) => {
           if (dead) return
-          const picks = ((p || {}).items || []).filter((x) => x && x.state === 'new').length
-          const inbox = ((((i || {}).data || {}).items) || []).length
-          setBadges({ picks, inbox })
+          const find = ((p || {}).items || []).filter((x) => x && x.state === 'new').length
+          const reply = ((((i || {}).data || {}).items) || []).length
+          setBadges({ find, reply })
         }).catch(() => {})
         return () => { dead = true }
       }, [])
@@ -1718,15 +1725,16 @@ window.__ModuleLoader__.load({
         loading: loading['/ledger?n=40'] || loading['/publishes?n=30'] || loading['/errors?n=20'],
       })
 
-      /* 一级三件事，其余收进「更多」—— 只有两层，不许第三层（PLAN §2.2） */
-      const VIEWS = [['picks', '挑'], ['inbox', '待办'], ['digest', '今天']]
-      const MORE = [['auto', '自主'], ['settings', '设置'], ['feed', '刷视频'],
-        ['budget', '额度'], ['ops', '后台'], ['trend', '趋势']]
-      const viewNode = {
-        picks: h(Picks), inbox: nodeInbox, digest: nodeDigest, auto: nodeAuto, settings: nodeSettings,
-        feed: nodeFeed, budget: nodeBudget, ops: nodeOps, trend: nodeTrend,
-      }[view] || nodeInbox
-      const inMore = MORE.some(([k]) => k === view)
+      /* 四个区 = 四个动词：看（今天）· 回（回应）· 找（找内容）· 调（设置）。
+       * 以前按模块分组，同一个动作被拆到几个区里（刷视频就拆成了三份），
+       * 于是"我想刷点新东西"要先想清楚点哪个入口 —— 那说明分组错了。 */
+      const VIEWS = [['today', '今天'], ['reply', '回应'], ['find', '找内容'], ['settings', '设置']]
+      const viewCards = {
+        today: [nodeBudget, nodeDigest, nodeTrend],
+        reply: [nodeInbox, nodeAuto, nodeOps],
+        find: [h(Picks), nodeFeed],
+        settings: [nodeSettings],
+      }[view] || [nodeDigest]
       const tab = (id, label) => h('button', {
         key: id, type: 'button', 'data-on': view === id ? '' : undefined,
         onClick: () => { setView(id); try { localStorage.setItem('dys-view', id) } catch (_) {} },
@@ -1741,21 +1749,13 @@ window.__ModuleLoader__.load({
           refreshing, onRefresh: () => { reloadAll(); load(['/inbox?limit=8']) },
         }),
 
-        /* 一级三件 + 更多；当前落在二级区时「更多」自己亮着，刷新也不会看丢 */
-        h('div', { 'data-dys-seg': '' },
-          VIEWS.map(([id, l]) => tab(id, l)),
-          h('button', {
-            key: 'more', type: 'button', 'data-on': inMore ? '' : undefined,
-            onClick: () => setMoreOpen((v) => !v),
-          }, '更多')),
-        moreOpen || inMore ? h('div', { 'data-dys-seg': '', 'data-dys-seg2': '' },
-          MORE.map(([id, l]) => tab(id, l))) : null,
+        /* 四个动词一排，没有第二层 —— 找东西不用先想"它在哪个抽屉里" */
+        h('div', { 'data-dys-seg': '' }, VIEWS.map(([id, l]) => tab(id, l))),
 
         h('div', {
           'data-dys-view': '', ref: viewRef,
-          'data-h': ['settings', 'budget', 'trend', 'ops'].includes(view) ? 'auto' : undefined,
-          'data-more': overflowing && !['settings', 'budget', 'trend', 'ops'].includes(view) ? '' : undefined,
-        }, viewNode),
+          'data-more': overflowing ? '' : undefined,
+        }, ...viewCards),
 
         /* 动作结果：折起来，别糊脸 */
         msg ? h('div', {
