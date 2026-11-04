@@ -625,6 +625,9 @@ window.__ModuleLoader__.load({
       /* 谷时：这些动作每步都过模型，白天跑等于按原价买流程。空着 = 不限制。 */
       { k: 'activeFrom', label: '谷时从', ph: '00:30' },
       { k: 'activeTo', label: '谷时到', ph: '08:30' },
+      /* 两个出口分开数：私信分享几条、评论区 @ 几条。0 = 那条路不走。 */
+      { k: 'sharePerDay', label: '每天私信发你几条', ph: '0 = 不发' },
+      { k: 'atPerDay', label: '每天评论区 @ 你几条', ph: '0 = 不 @' },
       /* 这两个以前只在插件 config 里，改完还得重启；现在存了就把定时器重开一遍 */
       { k: 'dutyEveryMin', label: '回评论隔几分钟看一次', ph: '30' },
       { k: 'watchEverySec', label: '盯私信隔几秒看一次', ph: '90' },

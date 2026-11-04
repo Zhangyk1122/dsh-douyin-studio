@@ -238,16 +238,14 @@ export function apply(ctx, config) {
 			return { authors: [], tags: [], evidence: 0 }
 		}
 	}
-	/* 「看到好看的，叫一下主人」。一天最多 notifyPerDay 次，档位按 notifyTier：
-	 *   dm   → 分享卡片发私信
-	 *   at   → 在那条视频的评论区 @ 主人
-	 *   none → 只入库，不打扰
-	 * 计数落在 notify-state.json，跨天清零。没配主人昵称就直接跳过（别乱 @ 人）。 */
+	/* 「看到好看的，叫一下主人」。两个出口分开数（sharePerDay / atPerDay）：
+	 *   私信：先发分享卡片，再补一句「为什么想给你看」
+	 *   评论区：在那条视频下 @ 主人
+	 * 0 = 那条路不走。计数落 notify-state.json，跨天清零。没配主人昵称就跳过。 */
 	const tellOwner = async (cand, st) => {
 		if (!Array.isArray(cand) || !cand.length) return { ok: true, sent: false, why: '这轮没有候选' }
 		if (!st.ownerNick) return { ok: true, sent: false, why: '没填主人昵称，不敢乱叫' }
 		const top = [...cand].sort((a, b) => (b.score || 0) - (a.score || 0))[0]
-		const { allowNotify } = await import('./lib/notify.mjs')
 		const { isQuiet } = await import('./lib/toast.mjs')
 		const { dayKey } = await import('./lib/schedule.mjs')
 		const hhmm = (v) => {
@@ -255,24 +253,52 @@ export function apply(ctx, config) {
 			return m ? Number(m[1]) + Number(m[2]) / 60 : undefined
 		}
 		const file = join(homedir(), '.dsh', 'douyin-studio', 'notify-state.json')
-		const prev = readJsonSafe(file, { day: '', n: 0 }) || { day: '', n: 0 }
+		const prev = readJsonSafe(file, { day: '', share: 0, at: 0 }) || { day: '', share: 0, at: 0 }
 		const today = dayKey(new Date())
-		const calledToday = prev.day === today ? Number(prev.n) || 0 : 0
-		const quiet = st.notifyQuiet ? isQuiet(new Date(), { from: hhmm(st.quietFrom), to: hhmm(st.quietTo) }) : false
-		const d = allowNotify({ items: [top], calledToday, perDay: st.notifyPerDay, maxTier: st.notifyTier, quiet })
-		if (!d || !d.ok || !d.tier || d.tier === 'ingest') return { ok: true, sent: false, why: (d && d.why) || '今天不叫', tier: d && d.tier }
-		const desc = String(top.desc || '').replace(/\s+/g, ' ').slice(0, 24)
+		const used = prev.day === today
+			? { day: today, share: Number(prev.share) || 0, at: Number(prev.at) || 0 }
+			: { day: today, share: 0, at: 0 }
+		if (st.notifyQuiet && isQuiet(new Date(), { from: hhmm(st.quietFrom), to: hhmm(st.quietTo) })) {
+			return { ok: true, sent: false, why: '静音时段，先不吵你' }
+		}
+		/* 还有额度的那条路才走；私信优先（更直接），私信满了才轮到评论区。 */
+		const shareLeft = Math.max(0, Number(st.sharePerDay) || 0) - used.share
+		const atLeft = Math.max(0, Number(st.atPerDay) || 0) - used.at
+		const tier = shareLeft > 0 ? 'dm' : (atLeft > 0 ? 'at' : '')
+		if (!tier) return { ok: true, sent: false, why: '今天的「叫我」额度用完了' }
+		const desc = String(top.desc || '').replace(/\s+/g, ' ').slice(0, 60)
 		let r = null
-		if (d.tier === 'dm') {
+		let say = ''
+		if (tier === 'dm') {
 			r = await run(['share', '--aweme', top.aweme_id, '--to', st.ownerNick,
 				...(st.ownerSec ? ['--sec', st.ownerSec] : [])], { timeout: 180000 })
-		} else if (d.tier === 'at') {
+			/* 光甩个卡片太干。补一句它自己看完想说的话 —— 用主人配的人设，20 字以内。 */
+			if (r && r.ok) {
+				try {
+					const { generate } = await import('./lib/duty.mjs')
+					const { personaLine } = await import('./lib/settings.mjs')
+					say = String(await generate([personaLine(st), '你在刷抖音，看到这条想分享给主人。',
+						'视频文案：' + (desc || '（没有文案）'),
+						'只写一句你为什么想给他看，20 字以内，别用问号收尾。'].join('\n'), { timeout: 45000 }) || '')
+						.replace(/\s+/g, ' ').trim().slice(0, 40)
+				} catch { say = '' }
+				if (say) {
+					const dr = await run(['dm', '--to', st.ownerSec || st.ownerNick, '--text', say], { timeout: 180000 })
+					if (!(dr && dr.ok)) say = ''
+				}
+			}
+		} else {
 			r = await run(['comment-at', '--aweme', top.aweme_id, '--uid', st.ownerUid, '--text',
-				'这条我觉得你会喜欢：' + (desc || '刷到的一个')], { timeout: 180000 })
+				'这条我觉得你会喜欢：' + (desc.slice(0, 24) || '刷到的一个')], { timeout: 180000 })
 		}
 		const sent = Boolean(r && r.ok)
-		if (sent) atomicWriteJson(file, { day: today, n: calledToday + 1, at: new Date().toISOString(), aweme: top.aweme_id, tier: d.tier })
-		return { ok: true, sent, tier: d.tier, aweme: top.aweme_id, why: sent ? '' : ((r && (r.error || r.stage)) || '发失败了') }
+		if (sent) {
+			const next = { day: today, share: used.share + (tier === 'dm' ? 1 : 0), at: used.at + (tier === 'at' ? 1 : 0),
+				aweme: top.aweme_id, tier, notifiedAt: new Date().toISOString() }
+			atomicWriteJson(file, next)
+		}
+		return { ok: true, sent, tier, aweme: top.aweme_id, say,
+			why: sent ? '' : ((r && (r.error || r.stage)) || '发失败了') }
 	}
 
 	let picksTask = null
@@ -848,8 +874,9 @@ export function apply(ctx, config) {
 	} catch { /* 设置读不到就不起，别把插件拖挂 */ }
 
 	/* 自主执行：定时器常驻，每轮自己看开关 —— 关着就是空转，不花钱也不发东西。
+	 * 2026-11-04 从 5 分钟放到 30 分钟：主人说私信不用一直盯，跟回评论一个节奏就行。
 	 * 这样面板上开/关立刻生效，不需要重启。 */
-	try { AUTOPILOT.start({ everyMin: 5, runCli: run }) } catch { /* 起不来不影响手动 */ }
+	try { AUTOPILOT.start({ everyMin: 30, runCli: run }) } catch { /* 起不来不影响手动 */ }
 
 	/* 每天自动刷几轮：轮次由 lib/schedule.mjs 铺开（纯函数，单测钉着）。
 	 * 只有「现在轮到了、今天还没刷过这一轮」才真去刷；跨天清零。
