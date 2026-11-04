@@ -304,13 +304,10 @@ window.__ModuleLoader__.load({
 [data-dys-said]{padding:7px 9px;border-radius:9px;font-size:11.5px;color:var(--dys-ok);
   background:color-mix(in oklab, var(--dys-ok) 10%, transparent);}
 
-/* 数字框要保住浏览器自带的上下箭头：下面那条 appearance:none 会把 spinner 吃掉 */
-[data-dys-in][type="number"]{appearance:auto;-moz-appearance:auto;padding-right:2px;}
-[data-dys-in][type="number"]::-webkit-inner-spin-button{opacity:1;height:20px;}
+[data-dys-in][type="number"]{appearance:auto;-moz-appearance:auto;padding-right:2px;} /* 数字框留住上下箭头 */
 [data-dys-in]{appearance:none;font:inherit;font-size:12px;line-height:1.5;padding:3px 8px;border-radius:8px;
   border:1px solid var(--dys-line2);background:transparent;color:inherit;min-width:0;}
-[data-dys-in]:focus{outline:none;border-color:color-mix(in oklab, var(--dys-blue) 60%, transparent);}
-[data-dys-in]::placeholder{color:var(--dys-dim);}
+[data-dys-in]:focus{outline:none;border-color:color-mix(in oklab, var(--dys-blue) 60%, transparent);} [data-dys-in]::placeholder{color:var(--dys-dim);}
 
 /* ── 列表 / 时间线 ── */
 [data-dys-list]{display:flex;flex-direction:column;gap:1px;}
