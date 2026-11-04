@@ -613,6 +613,10 @@ window.__ModuleLoader__.load({
       { k: 'minSec', label: '最短秒数', ph: '0 = 不限' },
       { k: 'maxSec', label: '最长秒数', ph: '0 = 不限' },
       { k: 'minDigg', label: '最低点赞', ph: '0 = 不限' },
+      /* 自动刷：几点到几点之间铺开几轮。0 轮就是关。 */
+      { k: 'scanRounds', label: '每天自己刷几轮', ph: '0 = 不自动刷' },
+      { k: 'scanFrom', label: '从几点开始', ph: '9' },
+      { k: 'scanTo', label: '到几点结束', ph: '22' },
       { g: '时间' },
       /* 每天投递：几条 + 几点。0 条就是不开。 */
       { k: 'digestPerDay', label: '每天发我几条视频', ph: '0 = 不发' },

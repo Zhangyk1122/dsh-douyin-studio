@@ -793,8 +793,33 @@ export function apply(ctx, config) {
 	 * 这样面板上开/关立刻生效，不需要重启。 */
 	try { AUTOPILOT.start({ everyMin: 5, runCli: run }) } catch { /* 起不来不影响手动 */ }
 
+	/* 每天自动刷几轮：轮次由 lib/schedule.mjs 铺开（纯函数，单测钉着）。
+	 * 只有「现在轮到了、今天还没刷过这一轮」才真去刷；跨天清零。
+	 * 刷的是 feed —— 只读，不点赞不评论，所以不占消息额度也不动别人的东西。 */
+	const scan = { day: '', done: 0 }
+	const scanTick = async () => {
+		try {
+			const st = readSettings()
+			const { dayKey, dueAt } = await import('./lib/schedule.mjs')
+			const today = dayKey(new Date())
+			if (scan.day !== today) { scan.day = today; scan.done = 0 }
+			const d = dueAt(new Date(), { rounds: st.scanRounds, from: st.scanFrom, to: st.scanTo }, scan.done)
+			if (!d.due) return
+			scan.done = d.index + 1
+			await startPicksCollect()
+		} catch { /* 刷失败不该连累别的定时器 */ }
+	}
+	let scanTimer = null
+	try {
+		scanTimer = setInterval(scanTick, 600000)
+		if (scanTimer.unref) scanTimer.unref()
+		const first = setTimeout(scanTick, 180000)
+		if (first.unref) first.unref()
+	} catch { /* 起不来就只留手动 */ }
+
 	if (typeof ctx.effect === 'function') {
 		ctx.effect(() => () => {
+			try { if (scanTimer) clearInterval(scanTimer) } catch { /* 已经停了 */ }
 			try { WATCH.stop() } catch { /* 已经停了 */ }
 			try { DUTY.stop() } catch { /* 已经停了 */ }
 			try { AUTOPILOT.stop() } catch { /* 已经停了 */ }
