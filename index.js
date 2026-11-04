@@ -215,7 +215,50 @@ export function apply(ctx, config) {
 		})()
 		return inboxTask
 	}
+	/* ── 候选库：同一时刻只跑一轮，跑完写盘 ──────────────────────────────
+	 * 为什么放后台：一轮要真浏览器 + 几轮刷，十几秒到几分钟。请求里等它 = 面板卡住。
+	 * 和 /inbox 的一条规矩：**慢的东西不许在请求路径上 await**。 */
+	let picksTask = null
+	const startPicksCollect = () => {
+		if (picksTask) return picksTask
+		picksTask = (async () => {
+			try {
+				const st = readSettings()
+				const csv = (s) => String(s || '').split(/[,，\s]+/).map((x) => x.trim()).filter(Boolean)
+				const n = Math.min(Math.max(Number(st.count) || 12, 1), 50)
+				const r = await run(['feed',
+					'--count', String(n),
+					'--rounds', String(Math.min(Math.max(Number(st.rounds) || 3, 1), 6)),
+					'--limit', String(n),
+					'--mark-seen',
+				], { timeout: 300000 })
+				if (!r || !r.ok) return r
+				const { toCandidate, judge, mergeItems, load, save } = await import('./lib/picks.mjs')
+				const ctx = {
+					keywords: csv(st.keywords), blockKeywords: csv(st.blockKeywords),
+					minSec: st.minSec, maxSec: st.maxSec, minDigg: st.minDigg,
+					/* 作者 / 话题的重合度要等口味画像（lib/taste.mjs）——
+					 * 现在传空数组：宁可只讲"命中关键词"，也不假装认识你。 */
+					authors: [], tags: [],
+				}
+				const cand = []
+				for (const it of r.items || []) {
+					const c = toCandidate(it, String(r.source || ''))
+					const j = judge(c, ctx)
+					if (!j.ok) continue
+					cand.push({ ...c, score: j.score, why: j.why })
+				}
+				save(mergeItems(load().items, cand))
+				return { ok: true, picked: cand.length, fetched: r.fetched }
+			} finally {
+				picksTask = null
+			}
+		})()
+		return picksTask
+	}
+
 	const readJsonFile = async (p, dflt) => {
+
 		try {
 			const { readFileSync } = await import('node:fs')
 			return JSON.parse(readFileSync(p, 'utf8').replace(/^\uFEFF/, ''))
@@ -356,6 +399,61 @@ export function apply(ctx, config) {
 						if (body.markSeen) args.push('--mark-seen')
 						const r = await run(args, { timeout: 300000 })
 						return sendJson(res, 200, r)
+					}
+
+					/* ── 候选库「挑」：刷完的东西留下来，才有得挑 ──────────────────
+					 * 和 /inbox 一样是「先给缓存再后台补」：collect 立刻回，前端轮询。
+					 * 判分逻辑全在 lib/picks.mjs（纯函数，21 例测试），这里只组装 ctx。 */
+					if (req.method === 'GET' && p === '/picks') {
+						const { load, rank, stats } = await import('./lib/picks.mjs')
+						const all = load()
+						return sendJson(res, 200, {
+							ok: true,
+							items: rank(all.items).slice(0, 30),
+							stats: stats(all.items),
+							updatedAt: all.updatedAt,
+							refreshing: Boolean(picksTask),
+						})
+					}
+					if (req.method === 'POST' && p === '/picks/collect') {
+						const started = !picksTask
+						startPicksCollect()
+						return sendJson(res, 200, { ok: true, started, refreshing: true })
+					}
+					if (req.method === 'POST' && p === '/picks/act') {
+						const body = await readBody(req)
+						const id = String(body.id || '').trim()
+						const act = String(body.act || '').trim()
+						if (!id) return sendJson(res, 400, { ok: false, error: '要给 id' })
+						const mod = await import('./lib/picks.mjs')
+						const items = mod.load().items
+						const one = items.find((x) => String(x.aweme_id) === id)
+						if (!one) return sendJson(res, 404, { ok: false, error: '候选库没这条（可能已被淘汰）' })
+						/* 本地状态：看过了 / 不想看。都不出门，不用确认。 */
+						if (act === 'seen' || act === 'dismissed') {
+							mod.save(mod.setState(items, id, act))
+							return sendJson(res, 200, { ok: true, id, state: act })
+						}
+						/* 发我 = 把视频卡片分享到你自己的会话里。**撤不回来**，所以双确认，
+						 * 和 /dm/send 同一个标准；也走同一个 dm 额度池。 */
+						if (act === 'sent') {
+							const nick = String(readSettings().ownerNick || '').trim()
+							if (!nick) return sendJson(res, 200, { ok: false, stage: 'settings', error: '还没填主人昵称（设置 › 主人）' })
+							if (body.confirm !== true) {
+								return sendJson(res, 200, { ok: false, needsConfirm: true, nick, title: one.desc, hint: '再点一次就发到你的私信里' })
+							}
+							const budgetMod = await import('./lib/budget.mjs')
+							const bq = budgetMod.check({ ch: 'dm', peer: nick, text: one.desc.slice(0, 60) })
+							if (!bq.ok) return sendJson(res, 200, { ok: false, stage: 'budget', error: bq.why, budget: bq.quota.messages })
+							const { share } = await import('./lib/share.mjs')
+							const r = await share({ awemeId: one.aweme_id, nick })
+							if (r && r.ok) {
+								mod.save(mod.setState(mod.load().items, id, 'sent'))
+								budgetMod.record({ ch: 'dm', peer: nick, note: 'picks send' })
+							}
+							return sendJson(res, 200, r)
+						}
+						return sendJson(res, 400, { ok: false, error: 'act 只认 seen / dismissed / sent' })
 					}
 					/* 在自己作品下发顶层评论：双确认，和私信一个标准 */
 					if (req.method === 'POST' && p === '/comment-self') {

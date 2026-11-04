@@ -34,7 +34,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
     const API = '/api/douyin-studio'
-    const PANEL_BUILD = 27
+    const PANEL_BUILD = 28
     const { useState, useEffect, useRef, useCallback } = React
 
     /* ── 样式 ────────────────────────────────────────────────────────────
@@ -178,6 +178,17 @@ window.__ModuleLoader__.load({
 [data-dys-btn][data-armed]{border-color:var(--dys-bad);
   background:color-mix(in oklab, var(--dys-bad) 16%, transparent);color:var(--dys-bad);font-weight:600;}
 [data-dys-btn][data-ghost]{border-color:transparent;color:var(--dys-dim);padding:3px 7px;}
+
+/* ── 挑：一条一行，右侧只放两个动作（发我 / 不要） ── */
+[data-dys-pick]{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 10px;align-items:center;
+  padding:9px 0;border-bottom:1px solid var(--dys-line);}
+[data-dys-pick]:last-child{border-bottom:0;}
+[data-dys-pickt]{font-size:12.5px;line-height:1.45;overflow:hidden;display:-webkit-box;
+  -webkit-line-clamp:2;-webkit-box-orient:vertical;}
+[data-dys-pickm]{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;}
+/* 分数是元数据，靠右站 —— 贴在句子后面会被读成句子的一部分 */
+[data-dys-pickm] > [data-dys-tag]{margin-left:auto;}
+[data-dys-pickacts]{display:flex;align-items:center;gap:8px;flex:0 0 auto;}
 [data-dys-btn][data-ghost]:hover{color:var(--dys-ink);background:var(--dys-fill2);}
 [data-dys-btn:disabled]{opacity:.4;cursor:default;}
 [data-dys-row]{display:flex;gap:7px;align-items:center;flex-wrap:wrap;}
@@ -1394,6 +1405,95 @@ window.__ModuleLoader__.load({
         err ? h(ErrLine, { text: err }) : null)
     }
 
+    /* ── 挑：它替你刷完之后，留下值得看的那几条 ─────────────────────────
+     * 设计取舍：一屏最多 8 条，每条只给两个动作。
+     * 「发我」是撤不回来的（真把卡片发进你私信），所以两次点击 + 按钮变字。
+     * 赞 / 收藏 还没接 —— 那要动 budget.mjs 的额度表，不在这版里假装有。 */
+    const Picks = () => {
+      const [st, setSt] = useState(null)
+      const [err, setErr] = useState('')
+      const [busy, setBusy] = useState('')
+      const [armed, setArmed] = useState('')
+      const [note, setNote] = useState('')
+
+      const pull = useCallback(async () => {
+        try { setSt(await jget('/picks')); setErr('') }
+        catch (e) { setErr(String((e && e.message) || e)) }
+      }, [])
+      useEffect(() => { pull() }, [pull])
+      /* 收集中每 4 秒问一次 —— 和收件箱同一条规矩：不让人盯着转圈 */
+      useEffect(() => {
+        if (!st || !st.refreshing) return
+        const t = setTimeout(pull, 4000)
+        return () => clearTimeout(t)
+      }, [st, pull])
+
+      const collect = async () => {
+        setBusy('collect'); setNote('')
+        try { await jpost('/picks/collect', {}); await pull() }
+        catch (e) { setNote('没跑起来：' + String((e && e.message) || e)) }
+        finally { setBusy('') }
+      }
+      const dismiss = async (id) => {
+        setBusy('dismissed:' + id)
+        try { await jpost('/picks/act', { id, act: 'dismissed' }); await pull() }
+        catch (e) { setNote('没成：' + String((e && e.message) || e)) }
+        finally { setBusy('') }
+      }
+      const sendIt = async (id, confirm) => {
+        setBusy('sent:' + id)
+        try {
+          const r = await jpost('/picks/act', { id, act: 'sent', confirm })
+          if (r && r.needsConfirm) { setArmed(id); setNote('再点一次就发到「' + r.nick + '」的私信里'); return }
+          if (r && r.ok) { setNote('已发到你私信'); setArmed(''); await pull() }
+          else setNote((r && (r.error || r.hint)) || '没发出去')
+        } catch (e) { setNote('没成：' + String((e && e.message) || e)) }
+        finally { setBusy('') }
+      }
+
+      const s = (st && st.stats) || {}
+      const items = (st && st.items) || []
+      const spinning = busy === 'collect' || Boolean(st && st.refreshing)
+      return h(Card, {
+        title: '挑', icon: 'film', lead: true,
+        sub: st
+          ? '候选 ' + num(s.total) + ' 条 · 今天叫过 ' + num(s.called) + ' 次' + (st.refreshing ? ' · 正在刷…' : '')
+          : '刷完的东西留在这儿，值得看的才叫你',
+        tools: h(Btn, { label: '刷一批', icon: 'film', primary: !items.length, busy: spinning, busyLabel: '刷…', onClick: collect }),
+      },
+        items.length
+          ? h('div', null, items.slice(0, 8).map((it) => h('div', { key: it.aweme_id, 'data-dys-pick': '' },
+            h('div', { 'data-dys-pickmain': '' },
+              h('div', { 'data-dys-pickt': '', title: it.desc || '' }, it.desc || '（没有文案）'),
+              h('div', { 'data-dys-pickm': '' },
+                h('span', { 'data-dys-xs': '', 'data-dys-dim': '' },
+                  (it.author || '?') + ' · ' + (num(it.duration_sec) || '—') + 's · 赞 ' + num(it.digg)),
+                h('span', { 'data-dys-xs': '', 'data-dys-dim': '' }, '· ' + (it.why || '')),
+                h('span', { 'data-dys-tag': '' }, String(num(it.score))))),
+            h('div', { 'data-dys-pickacts': '' },
+              h(Btn, {
+                label: armed === it.aweme_id ? '确认发' : '发我',
+                /* 一屏四个实心蓝按钮 = 谁都不突出（b13 那条规矩）。
+                 * 所以平时是描边，点了变「确认发」才实心 —— 实心只代表"即将发生"。 */
+                primary: armed === it.aweme_id,
+                busy: busy === 'sent:' + it.aweme_id, busyLabel: '发…',
+                onClick: () => sendIt(it.aweme_id, armed === it.aweme_id),
+              }),
+              h(Btn, {
+                label: '×', ghost: true, title: '不想看（以后少给你这种）',
+                busy: busy === 'dismissed:' + it.aweme_id,
+                onClick: () => dismiss(it.aweme_id),
+              })))))
+          : h(Empty, {
+            text: st ? '还没挑过 —— 刷一批，它会把值得看的留下' : '正在读候选库…',
+            action: st ? h(Btn, { label: '刷一批', onClick: collect, busy: spinning, busyLabel: '刷…' }) : null,
+          }),
+        h('div', { 'data-dys-xs': '', 'data-dys-dim': '' },
+          '赞 / 收藏还没接，先用「发我」把值得的存在私信里。'),
+        note ? h('div', { 'data-dys-note': '' }, note) : null,
+        err ? h(ErrLine, { text: err }) : null)
+    }
+
     /* ── 面板 ─────────────────────────────────────────────────────────── */
     const Panel = () => {
       const { data, err, loading, load, drop } = useData()
@@ -1408,9 +1508,9 @@ window.__ModuleLoader__.load({
       const [forcingInbox, setForcingInbox] = useState(false)
       const rootRef = useRef(null)
       const [cols, setCols] = useState('2')
-      /* 当前看哪一区。记住上次停在哪儿 —— 一天里 80% 的时间都在「待办」。 */
+      /* 当前看哪一区。记住上次停在哪儿；第一次打开停在「挑」（b28）。 */
       const [view, setView] = useState(() => {
-        try { return localStorage.getItem('dys-view') || 'inbox' } catch (_) { return 'inbox' }
+        try { return localStorage.getItem('dys-view') || 'picks' } catch (_) { return 'picks' }
       })
 
       const base = ['/status', '/budget', '/config', '/watch', '/duty', '/queue', '/settings', '/autopilot', '/trend?days=14', '/publishes?n=30', '/ledger?n=40', '/errors?n=20']
@@ -1557,9 +1657,9 @@ window.__ModuleLoader__.load({
 
       /* 一次只画一张卡 —— 页面高度就定住了，不会越用越长。
        * 八张卡一张都不少，只是不再同时挂在 DOM 上。 */
-      const VIEWS = [['inbox', '待办'], ['digest', '今天'], ['auto', '自主'], ['settings', '设置'],
+      const VIEWS = [['picks', '挑'], ['inbox', '待办'], ['digest', '今天'], ['auto', '自主'], ['settings', '设置'],
         ['feed', '刷视频'], ['budget', '额度'], ['ops', '后台'], ['trend', '趋势']]
-      const viewNode = { inbox: nodeInbox, digest: nodeDigest, auto: nodeAuto, settings: nodeSettings,
+      const viewNode = { picks: h(Picks), inbox: nodeInbox, digest: nodeDigest, auto: nodeAuto, settings: nodeSettings,
         feed: nodeFeed, budget: nodeBudget, ops: nodeOps, trend: nodeTrend }[view] || nodeInbox
 
       return h('div', {
