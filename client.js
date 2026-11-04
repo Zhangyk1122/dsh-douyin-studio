@@ -260,11 +260,14 @@ window.__ModuleLoader__.load({
 [data-dys-switch][data-on] > i{left:17px;background:var(--dys-on-accent);}
 
 [data-dys-ibx]{display:flex;flex-direction:column;gap:2px;min-height:60px;}
-[data-dys-item]{display:grid;grid-template-columns:3px minmax(0,1fr);gap:10px;
+[data-dys-item]{display:grid;grid-template-columns:6px minmax(0,1fr);gap:9px;
   padding:8px 8px 8px 0;border-radius:10px;cursor:pointer;border:1px solid transparent;}
 [data-dys-item]:hover{background:var(--dys-fill2);}
 [data-dys-item][data-open]{background:var(--dys-fill2);border-color:var(--dys-line);}
-[data-dys-mark]{border-radius:999px;background:color-mix(in oklab, currentColor 18%, transparent);}
+/* 行首标记是「圆点」不是「竖条」：竖条一屏三根就等于没标记，还抢标题。
+   点跟标题那一行对齐（行高 19px，点 6px → margin-top 6px 正好居中）。 */
+[data-dys-mark]{width:6px;height:6px;align-self:start;margin-top:6px;
+  border-radius:999px;background:color-mix(in oklab, currentColor 18%, transparent);}
 [data-dys-item][data-worth="1"] [data-dys-mark]{background:color-mix(in oklab, var(--dys-blue) 55%, transparent);}
 [data-dys-item][data-worth="2"] [data-dys-mark]{background:var(--dys-blue);}
 [data-dys-itemtop]{display:flex;align-items:baseline;gap:7px;min-width:0;}
@@ -675,7 +678,7 @@ window.__ModuleLoader__.load({
             SETTING_GROUPS.map((g) => h('button', {
               key: g.name, type: 'button', 'data-dys-tab': '', 'data-on': grp === g.name ? '' : undefined,
               onClick: () => setGrp(g.name),
-            }, g.name, h('i', null, g.fields.length))))
+            }, g.name, h('i', null, g.fields.length + ' 项'))))
           : null,
         v
           ? h('div', { 'data-dys-formgrid': '' },
