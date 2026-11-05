@@ -23,6 +23,7 @@ import { execJson } from './lib/proc.mjs'
 import { checkOrigin } from './lib/guard.mjs'
 import { serveInbox, DEFAULT_TTL } from './lib/cache.mjs'
 import { readSettings, writeSettings, settingsEnv, DEFAULTS } from './lib/settings.mjs'
+import * as BUDGET from './lib/budget.mjs'
 import { atomicWriteJson, readJsonSafe } from './lib/fsx.mjs'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -102,6 +103,32 @@ export function apply(ctx, config) {
 		if (!Number.isFinite(Number(perDay.comment))) perDay.comment = S.perDay
 		return JSON.stringify({ ...base, perDay })
 	}
+
+	/* 把「面板上的额度 / 主人 uid」注入宿主进程。
+	 * 不注的话，面板里发私信、挑卡「发我」这些**在宿主里查额度**的动作，
+	 * 用的还是默认值（主人也可能被"同一人每天 2 条"拦住）。 */
+	/* 盯私信发现新消息 → 立刻叫一轮「回私信」。
+	 * 以前是"90 秒发现、30 分钟才回"，中间隔着一个定时器 —— 对方体感就是慢半拍。
+	 * 两道保险：dmBusy 防重入，autopilot 内部还有一把单飞锁（dmRunning）。 */
+	let dmBusy = false
+	const replyDmNow = async () => {
+		if (dmBusy) return
+		dmBusy = true
+		try { await AUTOPILOT.runDm({}) } catch { /* 即时回失败还有定时器兜底 */ }
+		finally { dmBusy = false }
+	}
+
+	const syncBudget = () => {
+		try {
+			const st = readSettings()
+			let lim = {}
+			try { lim = S.limitsJson ? JSON.parse(S.limitsJson) : {} } catch { lim = {} }
+			const perDay = { ...(lim.perDay || {}) }
+			if (!Number.isFinite(Number(perDay.comment))) perDay.comment = S.perDay
+			BUDGET.configure({ limits: { ...lim, perDay }, ownerUid: st.ownerUid })
+		} catch { /* 读不到设置就沿用默认额度，不要因此挂掉 */ }
+	}
+	syncBudget()
 
 	const env = () => {
 		const e = { ...process.env }
@@ -624,6 +651,7 @@ export function apply(ctx, config) {
 						/* 存完就按新值把定时器重开一遍 —— 这样面板改时长/间隔，不用重启 DSH。
 						 * 关着的（值班没启动过）不硬拉起来，免得改了个数字把机器人唤醒了。 */
 						if (r.ok) {
+							syncBudget()
 							const n = readSettings()
 							try {
 								const ds = DUTY.status()
@@ -633,7 +661,7 @@ export function apply(ctx, config) {
 							} catch { /* 值班重开失败不该让保存失败 */ }
 							try {
 								const ws = WATCH.status()
-								if (ws && ws.running) WATCH.start({ everySec: n.watchEverySec || S.watchEverySec, quiet: true, startDelaySec: 0 })
+								if (ws && ws.running) WATCH.start({ everySec: n.watchEverySec || S.watchEverySec, quiet: true, startDelaySec: 0, onFresh: replyDmNow })
 							} catch { /* 同上 */ }
 							AUTOPILOT.configure({ runCli: run })
 						}
@@ -868,7 +896,7 @@ export function apply(ctx, config) {
 					/* 盯私信也能从面板开关 —— 以前只能改配置再重启，等于没有开关 */
 					if (req.method === 'POST' && p === '/watch') {
 						const body = await readBody(req)
-						if (body.action === 'start') return sendJson(res, 200, { ok: true, ...WATCH.start({ everySec: Number(S.watchEverySec) || 90, quiet: true }) })
+						if (body.action === 'start') return sendJson(res, 200, { ok: true, ...WATCH.start({ everySec: Number(S.watchEverySec) || 90, quiet: true, onFresh: replyDmNow }) })
 						if (body.action === 'stop') return sendJson(res, 200, { ok: true, ...WATCH.stop() })
 						return sendJson(res, 200, { ok: true, ...WATCH.status() })
 					}
@@ -933,7 +961,7 @@ export function apply(ctx, config) {
 	 *   - 值班：默认关（它会自己动手，得先点头才开）
 	 * 这两个都是「自己会醒」的东西，所以卸载时必须停掉，别留着幽灵定时器。 */
 	if (S.watchOn) {
-		try { WATCH.start({ everySec: S.watchEverySec, quiet: true, startDelaySec: 90 }) } catch { /* 盯梢起不来不该挡住插件 */ }
+		try { WATCH.start({ everySec: S.watchEverySec, quiet: true, startDelaySec: 90, onFresh: replyDmNow }) } catch { /* 盯梢起不来不该挡住插件 */ }
 	}
 	/* 值班：配置里开着，或面板上勾了「自己回评论」，都要起 */
 	try {

@@ -655,6 +655,8 @@ window.__ModuleLoader__.load({
       { k: 'ownerUid', label: '主人 uid', ph: '填了就不受「同一人每天2条」' },
       { k: 'keywords', label: '关键词', ph: '逗号分隔；填了会按词去搜' },
       { k: 'blockKeywords', label: '屏蔽词', ph: '命中就跳过' },
+      /* 时效：没有这一层，第一轮会把几个月前的老评论翻出来回一遍。0 = 不限。 */
+      { k: 'replyFreshHours', label: '只回多少小时内的评论', ph: '48（0 = 不限）', type: 'number', min: 0, max: 720 },
       { g: '刷视频' },
       { k: 'scanPerRound', label: '每轮看几个', ph: '10', type: 'number', min: 0, max: 50 },
       { k: 'scanGap', label: '每看完一条歇几秒', ph: '6', type: 'number', min: 0, max: 60 },
