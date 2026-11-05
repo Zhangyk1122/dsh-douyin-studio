@@ -52,7 +52,7 @@ const out = (o) => { process.stdout.write(JSON.stringify(o, null, 1) + '\n') }
 const die = (o, code = 1) => { process.stdout.write(JSON.stringify({ ok: false, ...o }, null, 1) + '\n'); process.exit(code) }
 
 const HELP = {
-	commands: ['status', 'works', 'detail', 'likes', 'notices', 'search', 'comments', 'reply', 'delcomment', 'publish', 'quick', 'latest', 'check', 'snapshot', 'delete', 'ledger', 'cost', 'doctor', 'trend', 'queue', 'watch', 'login', 'duty', 'dm', 'share', 'names', 'inbox', 'budget', 'dm-send', 'at-reply', 'feed', 'comment-self', 'comment-at', 'digest'],
+	commands: ['status', 'works', 'detail', 'likes', 'notices', 'search', 'comments', 'replies', 'reply', 'delcomment', 'publish', 'quick', 'latest', 'check', 'snapshot', 'delete', 'ledger', 'cost', 'doctor', 'trend', 'queue', 'watch', 'login', 'duty', 'dm', 'share', 'names', 'inbox', 'budget', 'dm-send', 'at-reply', 'feed', 'comment-self', 'comment-at', 'digest'],
 	limits: LIMITS,
 	who: WHO,
 	declare: DECLARE,
@@ -509,6 +509,20 @@ try {
 			recordReply({ aweme, cid, root, authorUid: author, text, reason: 'at', newCid: r.cid })
 		}
 		out({ ...r, stage: 'api', budget: q.quota.messages })
+		process.exit(r.ok ? 0 : 1)
+	}
+
+	/* 某条评论下面的回复（楼中楼）。没有这一步就永远看不到楼中楼，
+	 * 也就永远"没成功过" —— 下面那些 cid 就是回楼中楼时 --cid 要的值。 */
+	if (CMD === 'replies') {
+		const aweme = String(argOf('--aweme') || '')
+		const cid = String(argOf('--cid') || '')
+		if (!aweme || !cid) die({ error: '缺 --aweme / --cid（cid = 那条评论的 id）' })
+		const r = await api.replies(aweme, cid, { count: Math.min(numOf('--count', 20), 50) })
+		out({
+			...r,
+			hint: '回楼中楼：--aweme ' + aweme + ' --cid <下面某条的 cid> --root ' + cid,
+		})
 		process.exit(r.ok ? 0 : 1)
 	}
 

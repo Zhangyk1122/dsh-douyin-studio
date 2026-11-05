@@ -293,18 +293,33 @@ export function apply(ctx, config) {
 						'只写一句你为什么想给他看，20 字以内，别用问号收尾。'].join('\n'), { timeout: 45000 }) || '')
 						.replace(/\s+/g, ' ').trim().slice(0, 40)
 				} catch { say = '' }
-				if (say) {
-					const dr = await run(['dm', '--to', st.ownerSec || st.ownerNick, '--text', say], { timeout: 180000 })
-					if (!(dr && dr.ok)) say = ''
-				}
+				/* 生成失败也要有一句话。以前这里是 `if (say)`：模型一抖，就只甩一张卡片过去，
+				 * 收件人只看见一个视频，不知道你想说什么 —— 这就是「发视频不发消息」。
+				 * 兜底不是瞎编：它就是这条的标题剪短，信息量够、也不会装成人说的话。 */
+				if (!say) say = '这条想给你看看：' + (desc.slice(0, 24) || '刚刷到的')
+				const dr = await run(['dm', '--to', st.ownerSec || st.ownerNick, '--text', say], { timeout: 180000 })
+				/* 带话没发出去 = 卡片旁边没字，等于白说。记下来，别静默。 */
+				if (!(dr && dr.ok)) say = ''
 			}
 		} else {
-			r = await run(['comment-at', '--aweme', top.aweme_id, '--uid', st.ownerUid, '--text',
-				'这条我觉得你会喜欢：' + (desc.slice(0, 24) || '刷到的一个')], { timeout: 180000 })
+			/* 🔴 这里以前只传了 --uid，缺 --to（昵称）和 --sec，而 comment-at 三个都要，
+			 * 于是每一次都在参数校验那一步 die 掉了 —— 评论区 @ 从来没真正发出去过。 */
+			const atNick = String(st.ownerNick || '').trim()
+			const atUid = String(st.ownerUid || '').trim()
+			const atSec = String(st.ownerSec || '').trim()
+			if (!atNick || !atUid || !atSec) {
+				return {
+					ok: false, sent: false, tier: 'at',
+					why: '@ 到评论区需要「昵称 + 数字 uid + sec_uid」三样都填（现在缺 ' +
+						[!atNick ? '昵称' : '', !atUid ? 'uid' : '', !atSec ? 'sec_uid' : ''].filter(Boolean).join('、') + '）',
+				}
+			}
+			r = await run(['comment-at', '--aweme', top.aweme_id, '--to', atNick, '--uid', atUid, '--sec', atSec,
+				'--text', '这条我觉得你会喜欢：' + (desc.slice(0, 24) || '刷到的一个')], { timeout: 180000 })
 		}
 		const sent = Boolean(r && r.ok)
 		if (sent) {
-			const next = { day: today, share: used.share + (tier === 'dm' ? 1 : 0), at: used.at + (tier === 'at' ? 1 : 0),
+			const next = { day: today, share: used.share + (tier === 'dm' ? 1 : 0), at: used.at + (tier === 'at' ? 1 : 0), say,
 				aweme: top.aweme_id, tier, notifiedAt: new Date().toISOString(),
 				/* 落账：今天发过哪几条。少了这一行，下一轮又挑同一条（分最高的那条永远是它）。 */
 				sent: [...already, String(top.aweme_id)].slice(-20) }

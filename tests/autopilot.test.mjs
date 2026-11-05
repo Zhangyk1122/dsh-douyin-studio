@@ -6,7 +6,7 @@
  * 这里把「挑谁回」和「跨天计数」钉死，剩下的 IO 部分靠演练（tmp/smoke-autopilot.mjs）。
  */
 import assert from 'node:assert/strict'
-import { describe, it } from 'node:test'
+import { describe, it, test } from 'node:test'
 
 const { pickDm, pickAt, nextPublishCount, inActive } = await import('../lib/autopilot.mjs')
 
@@ -135,4 +135,22 @@ describe('nextPublishCount：跨天归零', () => {
 	it('从没发过 → 1', () => {
 		assert.equal(nextPublishCount({ day: '', today: '2026-11-03', count: 0 }), 1)
 	})
+})
+
+
+test('低峰可以配两段：任一段命中就算在低峰', () => {
+	const base = { activeFrom: '00:30', activeTo: '08:30', active2From: '13:00', active2To: '14:00' }
+	assert.equal(inActive(base, new Date(2026, 10, 5, 3, 0)), true, '第一段')
+	assert.equal(inActive(base, new Date(2026, 10, 5, 13, 30)), true, '第二段')
+	assert.equal(inActive(base, new Date(2026, 10, 5, 20, 0)), false, '两段都不在')
+})
+
+test('只配一段时另一段留空不影响判断', () => {
+	const one = { activeFrom: '00:30', activeTo: '08:30', active2From: '', active2To: '' }
+	assert.equal(inActive(one, new Date(2026, 10, 5, 3, 0)), true)
+	assert.equal(inActive(one, new Date(2026, 10, 5, 13, 30)), false)
+})
+
+test('两段都空 = 不限制（inActive 恒真）', () => {
+	assert.equal(inActive({ activeFrom: '', activeTo: '', active2From: '', active2To: '' }), true)
 })

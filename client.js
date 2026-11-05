@@ -310,6 +310,8 @@ window.__ModuleLoader__.load({
 [data-dys-said]{padding:7px 9px;border-radius:9px;font-size:11.5px;color:var(--dys-ok);
   background:color-mix(in oklab, var(--dys-ok) 10%, transparent);}
 
+/* 整行宽的字段（布尔开关）：夹在两列里会跟旁边的输入框对不齐 */
+[data-dys-field][data-wide]{grid-column:1 / -1;}
 [data-dys-in][type="number"]{appearance:auto;-moz-appearance:auto;padding-right:2px;} /* 数字框留住上下箭头 */
 /* 布尔字段：一个勾 + 一句状态。勾选本身就是状态，不用再加第二个提示点。 */
 [data-dys-check]{display:inline-flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;min-width:0;}
@@ -642,7 +644,7 @@ window.__ModuleLoader__.load({
               : {}),
             onChange: (e) => onChange(f.k, e.target.value), onBlur: blur,
           })
-      return h('label', { 'data-dys-field': '' },
+      return h('label', { 'data-dys-field': '', 'data-wide': f.w === 2 ? '' : undefined },
         h('span', { 'data-dys-flabel': '', title: f.label }, f.label), ctl)
     }
 
@@ -665,19 +667,29 @@ window.__ModuleLoader__.load({
       { k: 'scanFrom', label: '从几点开始', ph: '9', type: 'number', min: 0, max: 23 },
       { k: 'scanTo', label: '到几点结束', ph: '22', type: 'number', min: 0, max: 23 },
       { g: '时间' },
-      /* 以前只有默认值和判断逻辑，面板上没开关 —— 等于改不了。 */
-      { k: 'notifyQuiet', label: '静音时段不叫你', type: 'bool', on: '开（按下面时段）', off: '关（随时可以叫）' },
+      /* 顺序 = 两列网格的行顺序：**相邻两个必须是一对**。
+       * 上一版把「静音从 / 静音到」拆到了两行，「静音到 / 谷时从」并排 ——
+       * 看着像四个不相干的输入框，这就是那页"怪"的原因。 */
       { k: 'quietFrom', label: '静音从', ph: 'HH:MM' },
       { k: 'quietTo', label: '静音到', ph: 'HH:MM' },
-      /* 谷时：这些动作每步都过模型，白天跑等于按原价买流程。空着 = 不限制。 */
-      { k: 'activeFrom', label: '谷时从', ph: '00:30' },
-      { k: 'activeTo', label: '谷时到', ph: '08:30' },
+      /* 低峰可以配两段。它只决定「主动发布 / 自动刷视频」什么时候跑；
+       * 回消息在 09:00–23:00 都照常（除非把下面的「高峰期也回消息」关掉）。 */
+      { k: 'activeFrom', label: '低峰一 · 从', ph: '00:30' },
+      { k: 'activeTo', label: '低峰一 · 到', ph: '08:30' },
+      { k: 'active2From', label: '低峰二 · 从', ph: '留空 = 不设' },
+      { k: 'active2To', label: '低峰二 · 到', ph: '留空 = 不设' },
       /* 两个出口分开数：私信分享几条、评论区 @ 几条。0 = 那条路不走。 */
       { k: 'sharePerDay', label: '每天私信发你几条', ph: '0 = 不发', type: 'number', min: 0, max: 10 },
       { k: 'atPerDay', label: '每天评论区 @ 你几条', ph: '0 = 不 @', type: 'number', min: 0, max: 10 },
       /* 这两个以前只在插件 config 里，改完还得重启；现在存了就把定时器重开一遍 */
       { k: 'dutyEveryMin', label: '回评论隔几分钟看一次', ph: '30', type: 'number', min: 5, max: 240, step: 5 },
       { k: 'watchEverySec', label: '盯私信隔几秒看一次', ph: '90', type: 'number', min: 30, max: 600, step: 10 },
+      /* 两个开关放最后、各占整行：夹在时间输入框中间时，勾选框和输入框高度对不齐，
+       * 那一行看着就是歪的。 */
+      { k: 'peakReply', label: '高峰期也回消息', type: 'bool', w: 2,
+        on: '开（便宜时多做，贵时不装死）', off: '关（只在低峰窗口里回）' },
+      { k: 'notifyQuiet', label: '静音时段不叫你', type: 'bool', w: 2,
+        on: '开（按时段静音）', off: '关（随时可以叫）' },
       { g: '说话' },
       { k: 'persona', label: '人设（你谁）', ph: '留空 = 通用口吻' },
       { k: 'botName', label: '自称（日报标题）', ph: '留空 = 「日报」' },
