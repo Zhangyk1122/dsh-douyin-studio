@@ -45,7 +45,7 @@ window.__ModuleLoader__.load({
   --dys-fs:13px;
   --dys-r:12px;
   --dys-ink:currentColor;
-  --dys-line:color-mix(in oklab, currentColor 11%, transparent);
+  --dys-line:color-mix(in oklab, currentColor 13%, transparent);
   --dys-line2:color-mix(in oklab, currentColor 20%, transparent);
   --dys-fill:color-mix(in oklab, currentColor 4%, transparent);
   --dys-fill2:color-mix(in oklab, currentColor 7.5%, transparent);
@@ -305,8 +305,10 @@ window.__ModuleLoader__.load({
 [data-dys-line]{display:flex;gap:7px;font-size:11.5px;}
 [data-dys-line] > span:first-child{flex:0 0 30px;color:var(--dys-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 [data-dys-ta]{width:100%;resize:vertical;min-height:56px;font:inherit;font-size:12.5px;line-height:1.5;
-  padding:7px 9px;border-radius:9px;border:1px solid var(--dys-line2);background:transparent;color:var(--dys-ink);}
-[data-dys-ta]:focus{outline:none;border-color:color-mix(in oklab, var(--dys-blue) 60%, transparent);}
+  padding:7px 9px;border-radius:9px;border:1px solid var(--dys-line2);
+  background:color-mix(in oklab, currentColor 6%, transparent);color:var(--dys-ink);}
+[data-dys-ta]:focus{outline:none;border-color:color-mix(in oklab, var(--dys-blue) 62%, transparent);
+  box-shadow:0 0 0 3px color-mix(in oklab, var(--dys-blue) 16%, transparent);}
 [data-dys-said]{padding:7px 9px;border-radius:9px;font-size:11.5px;color:var(--dys-ok);
   background:color-mix(in oklab, var(--dys-ok) 10%, transparent);}
 
@@ -317,9 +319,14 @@ window.__ModuleLoader__.load({
 [data-dys-check]{display:inline-flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;min-width:0;}
 [data-dys-check] > input{width:14px;height:14px;accent-color:var(--dys-blue);cursor:pointer;flex:0 0 auto;margin:0;}
 [data-dys-check] > span{color:color-mix(in oklab, currentColor 78%, transparent);}
-[data-dys-in]{appearance:none;font:inherit;font-size:12px;line-height:1.5;padding:3px 8px;border-radius:8px;
-  border:1px solid var(--dys-line2);background:transparent;color:inherit;min-width:0;}
-[data-dys-in]:focus{outline:none;border-color:color-mix(in oklab, var(--dys-blue) 60%, transparent);} [data-dys-in]::placeholder{color:var(--dys-dim);}
+/* 输入框 = 第三个表面，不能和卡片同色：以前 transparent，空框只剩一条 1px 线，
+   看着像塌下去的洞。选择器加元素名是为了压住宿主对 input 的默认背景。 */
+input[data-dys-in],select[data-dys-in]{appearance:none;font:inherit;font-size:12px;line-height:1.5;padding:3px 8px;border-radius:8px;
+  border:1px solid var(--dys-line2);background:color-mix(in oklab, currentColor 6%, transparent);color:inherit;min-width:0;}
+input[data-dys-in]:focus,select[data-dys-in]:focus{outline:none;border-color:color-mix(in oklab, var(--dys-blue) 62%, transparent);
+  box-shadow:0 0 0 3px color-mix(in oklab, var(--dys-blue) 16%, transparent);}
+/* 占位符用 --dys-dim：深 #919398(5.5:1)、浅 #727272(4.9:1)，两边都过 AA */
+input[data-dys-in]::placeholder{color:var(--dys-dim);}
 
 /* ── 列表 / 时间线 ── */
 [data-dys-list]{display:flex;flex-direction:column;gap:1px;}
