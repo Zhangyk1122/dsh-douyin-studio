@@ -622,3 +622,39 @@ node tools/check.mjs
 
 `node tools/check.mjs` → PASS（76 文件 / 26 测试文件 / 339 例）。
 `tests/autopilot.test.mjs` 新增 3 例：两段低峰任一命中、只配一段、两段都空。
+
+---
+
+## 17. 2026-11-05 中午：三项收口 + 全流程实跑
+
+### 改了什么
+
+| 项 | 落点 | 语义 |
+|---|---|---|
+| 评论时效窗 | `lib/settings.mjs` `replyFreshHours`（默认 48h，0=不限）+ `duty.collect({freshHours})` | 只回 N 小时内的评论；老评论不再被翻出来回。`create_date` 是**无时区标记的 UTC**，按 UTC 解析 |
+| 主人豁免 + 额度注入 | `lib/budget.mjs configure({limits, ownerUid})`；`index.js syncBudget()` 启动与每次存设置时调用 | 面板里查额度（发私信、挑卡「发我」）以前用的是**默认值**：改了额度不生效、主人也会被「同一人 2 条」拦住。现在宿主注入，设置一改立刻生效 |
+| 新私信即时回 | `watch.tick({onFresh})` → `index.js replyDmNow()` → `AUTOPILOT.runDm` | 90 秒发现、30 分钟才回的延迟没了。两道锁：watch 的 `busy` 重入闸 + autopilot 的 `DM_RUNNING` 单飞锁 |
+
+### 实跑发现并修掉的问题
+
+1. **`budget` 在宿主里读的是默认值** —— 见上表第二行。不是"没实现"，是"注入了但只给了子进程"。
+2. **盯私信 tick 可重入** —— `setInterval` + 现在要等一次回私信（十几秒），到点会叠着跑。加了 `busy` 闸。
+3. **回私信并发** —— 定时器和即时回可能同时各发一条。加了 `DM_RUNNING` 单飞锁。
+4. **`lib/delete.mjs` 被 import 会杀进程** —— 它是顺序执行的脚本，末尾 `process.exit`。
+   全量扫「模块能不能加载」时踩到。加了 import 闸（明确报错，不是静默退出）。
+   ⚠️ `lib/publish-cli.mjs` 是同一个形状，但它在禁改区，只在文档里记一笔。
+
+### 验证记录（可复现）
+
+```
+node tools/check.mjs                 → PASS  76 文件 / 26 测试文件 / 339 例
+逐个 import 45 个 lib 模块            → 除 delete.mjs（已加闸）/ publish-cli.mjs（脚本）全部 OK
+node tools/dy.mjs reply --dry …       → ok, stage=dry, 落点打印正常
+node tools/dy.mjs at-reply --dry --root … → reply_id=楼根, reply_to_reply_id=被回那条 ✅
+node tools/dy.mjs comment-at --dry …  → text 自动加 @昵称，extra 正确
+node tools/dy.mjs replies（缺参）      → 明确报「缺 --aweme / --cid」
+设置归一化（active2 / peakReply / replyFreshHours）→ 通过
+UI 四个区截图 + probe-ui              → textBugs 0 / overflow 0，唯一 console 是 favicon 404
+```
+
+**没验证的**：真实账号上的"点发送"。评论区 @ 和楼中楼都要真页面，建议先 `--dry` 看一眼落点，再放一条真发。
