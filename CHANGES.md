@@ -1,5 +1,36 @@
 # CHANGES
 
+## 0.4.7 — 2026-11-08（收三个尾巴：感想、定点重排、收件箱口径）
+
+三件都是 11-07 验收时挂账的东西，不改功能、不加能力。
+
+### 改
+
+- `index.js`（`tellOwner` 里那段感想）：`String(await generate(...))` → `textOfResult(g)`。
+  根因：`lib/duty.mjs` 的 `generate()` 回的是 `{ok, text}`，整个对象被 `String()` 就是
+  `[object Object]` —— 11-07T12:59:45Z 那条发给主人的私信正是这么来的（`notify-state.json`
+  里的 `say` 也一起被污染）。取不到正文就返回空串，交给下面那句「这条想给你看看：…」兜底。
+- `lib/text-guard.mjs`：默认从**观察**翻成**拦截**（`guardMode()`）。非字符串正文现在
+  `ok:false` 直接拒发，错误串里带 `rawType`；想退回记账模式设
+  `DOUYIN_STUDIO_TEXT_GUARD=observe`（`off` / `0` / `false` / `warn` 同义）。
+  新增 `textOfResult(v, {fields})`：从 `{text|say|content|reply}` 里取正文。
+- `lib/autopilot.mjs`：新增 `rearm()`。`armDaily()` 以前只在 `start()` 里跑一次，
+  面板把 `reportAt` 从 22:30 改成 00:30 得重启宿主才算数；`rearm()` 就地按新时间重排，
+  自动巡航没在跑（`timer` 为空）时返回 `running:false`，不会把机器人弄醒。
+- `index.js`：`POST /settings` 保存成功后调 `AUTOPILOT.rearm()`，返回值里多一个 `daily`
+  （`{at, wait}` 或 `null`），面板能立刻看到「下一次定点在什么时候」。
+- `tests/text-guard.test.mjs`：重写。默认拦、`=observe` 退回、`textOfResult` 五种入参、
+  外加一条**事故写法不许回潮**的源码检查（跳过注释行，查 `String(await generate(` 与
+  `textOfResult(g)`）。
+- `tests/autopilot-clock.test.mjs`：+2 例（没在跑不硬拉起来；在跑时改 `reportAt`，`daily.at` 跟着变）。
+
+### 没改
+
+- 禁改区一个字节没动：`lib/im-send.mjs`、`lib/api.mjs`、`lib/budget.mjs`、`lib/publish*.mjs`。
+- `/inbox` 与 `/inbox/count` 的口径**只查清、没动代码**（结论写进交付说明与 `docs/STATUS.md`）：
+  同一份缓存里两者是一致的（3 = dm 0 + at 2 + own 1，11-08 00:46 实测）；
+  不一致只发生在「两次调用之间刷过一轮」或「面板只看 dm 一个区而角标是三区合计」。
+
 ## 0.4.6 — 2026-11-07（出站类型闸，**观察模式**，单独一批）
 
 只做一件事：给"发出去的正文"加一道类型检查。和 0.4.5 分开提交、分开上线，因为这类闸门

@@ -325,10 +325,14 @@ export function apply(ctx, config) {
 				try {
 					const { generate } = await import('./lib/duty.mjs')
 					const { personaLine } = await import('./lib/settings.mjs')
-					say = String(await generate([personaLine(st), '你在刷抖音，看到这条想分享给主人。',
+					const { textOfResult } = await import('./lib/text-guard.mjs')
+					const g = await generate([personaLine(st), '你在刷抖音，看到这条想分享给主人。',
 						'视频文案：' + (desc || '（没有文案）'),
-						'只写一句你为什么想给他看，20 字以内，别用问号收尾。'].join('\n'), { timeout: 45000 }) || '')
-						.replace(/\s+/g, ' ').trim().slice(0, 40)
+						'只写一句你为什么想给他看，20 字以内，别用问号收尾。'].join('\n'), { timeout: 45000 })
+					/* generate() 回的是 `{ok, text}`。以前这里 `String(await generate(...))`，
+					 * 整个对象被 String() 成 `[object Object]` —— 2026-11-07T12:59:45Z 那条私信
+					 * 就是它。现在按字段取（text/say/content/reply），取不到给空串走下面的兜底。 */
+					say = textOfResult(g).replace(/\s+/g, ' ').trim().slice(0, 40)
 				} catch { say = '' }
 				/* 生成失败也要有一句话。以前这里是 `if (say)`：模型一抖，就只甩一张卡片过去，
 				 * 收件人只看见一个视频，不知道你想说什么 —— 这就是「发视频不发消息」。
@@ -730,6 +734,7 @@ export function apply(ctx, config) {
 						const r = writeSettings(full)
 						/* 存完就按新值把定时器重开一遍 —— 这样面板改时长/间隔，不用重启 DSH。
 						 * 关着的（值班没启动过）不硬拉起来，免得改了个数字把机器人唤醒了。 */
+						let daily = null
 						if (r.ok) {
 							syncBudget()
 							const n = readSettings()
@@ -744,8 +749,12 @@ export function apply(ctx, config) {
 								if (ws && ws.running) WATCH.start({ everySec: n.watchEverySec || S.watchEverySec, quiet: true, startDelaySec: 0, onFresh: replyDmNow })
 							} catch { /* 同上 */ }
 							AUTOPILOT.configure({ runCli: run })
+							/* reportAt 改了要立刻重排定点任务（0.4.7）——
+							 * 不然「22:30 → 00:30」这种改动得重启宿主才算数。
+							 * 自动巡航没在跑时 rearm 返回 running:false，不会把机器人弄醒。 */
+							try { daily = AUTOPILOT.rearm().daily } catch { /* 排不上不影响保存 */ }
 						}
-						return sendJson(res, r.ok ? 200 : 500, { ...r, live: r.ok, hint: r.ok ? '已保存，定时器按新值重开了' : '' })
+						return sendJson(res, r.ok ? 200 : 500, { ...r, live: r.ok, daily, hint: r.ok ? '已保存，定时器按新值重开了' : '' })
 					}
 
 					/* ── 主人身份校验：面板上那颗红绿灯 ─────────────────────────

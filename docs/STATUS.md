@@ -1,6 +1,6 @@
 # 现状（自动生成）
 
-> 由 `node tools/status.mjs` 生成于 2026-11-07 15:20:45（UTC）
+> 由 `node tools/status.mjs` 生成于 2026-11-07 16:47:25（UTC）
 > **本页数字不要手改** —— 要更新就重跑脚本；其它文档引用这里，不要各写一份。
 
 ## 一、体量
@@ -8,7 +8,7 @@
 | 项 | 值 |
 |---|---|
 | `client.js` | 1740 行 |
-| `index.js` | 1151 行 |
+| `index.js` | 1160 行 |
 | lib 模块 | 66 个 |
 | 测试文件 | 47 个 |
 | 受保护文件 | 7 个（`tools/protected.json`） |
@@ -24,7 +24,7 @@
 ✓ 硬规矩       宿主进程无线程阻塞；白名单 2 处 CLI 同步调用已备案
 ✓ 依赖        仍然零依赖
 ✓ 不变量       守卫 / 缓存 / 异步 都还在被调用
-✓ 体量        client.js 1740/1940  index.js 1151/1250  最大 lib 742/760
+✓ 体量        client.js 1740/1940  index.js 1160/1250  最大 lib 742/760
 ✓ 测试        已跳过（--quick）
 ✓ 禁改区       7 个文件哈希未变
 ✓ 样式真源      client.js 与 assets/panel.css 一致（25645 字符）
@@ -46,8 +46,8 @@ PASS —— 可以交付
 
 - 没有异常
 
-## 四、最近动作（runs.jsonl 末 42 条）
+## 四、最近动作（runs.jsonl 末 60 条）
 
-- 合计 42 次，失败 0 次
+- 合计 60 次，失败 0 次
 - 最近没有失败记录
-- 按动作分布：inbox×12、status×12、schedule×10、feed×2、share×1、dm×2、tellOwner×1、budget×1、doctor×1
+- 按动作分布：status×18、inbox×19、schedule×10、feed×4、share×2、dm×3、tellOwner×2、budget×1、doctor×1

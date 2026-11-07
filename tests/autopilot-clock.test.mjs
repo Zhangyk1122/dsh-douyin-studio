@@ -1,4 +1,4 @@
-﻿/**
+/**
  * tests/autopilot-clock.test.mjs —— 定点任务要对表，不能靠 30 分钟顺风车（0.4.5）
  * ============================================================================
  * 2026-11-07：`reportAt: 22:30`，应用 22:19 重启，tick 落在 22:19 / 22:49，
@@ -55,5 +55,31 @@ test('autopilot-log.jsonl：明细账落在 state 同目录，追加不覆盖', 
 	assert.equal(rows.length, 2, '两行都在，第二行没有覆盖第一行')
 	assert.equal(JSON.parse(rows[0]).kind, 'report')
 	assert.equal(JSON.parse(rows[1]).ok, false)
+})
+
+test('rearm：没在跑就不硬拉起来（改个数字不该把机器人唤醒）', async () => {
+	const A = await import('../lib/autopilot.mjs')
+	A.stop()
+	const r = A.rearm()
+	assert.equal(r.ok, true)
+	assert.equal(r.running, false)
+	assert.equal(r.daily, null)
+})
+
+test('rearm：在跑时按 reportAt 重排，返回新的等待时长', async () => {
+	const A = await import('../lib/autopilot.mjs')
+	const { writeSettings } = await import('../lib/settings.mjs')
+	writeSettings({ reportAt: '23:59' })
+	A.start({ everyMin: 30, runCli: async () => ({ ok: true, results: [] }) })
+	try {
+		const r = A.rearm()
+		assert.equal(r.running, true)
+		assert.equal(r.daily.at, 23 * 60 + 59)
+		assert.ok(r.daily.wait > 0 && r.daily.wait <= 24 * 3600 * 1000)
+		/* 改成另一个点，再排一次要跟着变（这就是 0.4.7 修的那个洞） */
+		writeSettings({ reportAt: '00:07' })
+		const r2 = A.rearm()
+		assert.equal(r2.daily.at, 7)
+	} finally { A.stop() }
 })
 
