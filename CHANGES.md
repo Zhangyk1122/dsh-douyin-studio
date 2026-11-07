@@ -1,5 +1,29 @@
 # CHANGES
 
+## 0.4.6 — 2026-11-07（出站类型闸，**观察模式**，单独一批）
+
+只做一件事：给"发出去的正文"加一道类型检查。和 0.4.5 分开提交、分开上线，因为这类闸门
+一旦误拦，坏的是"该发的没发出去"，比 `[object Object]` 更难在半夜发现。
+
+### 加
+
+- `lib/text-guard.mjs`（新）：`rawTypeOf(v)` / `guardText(v, where)`。
+  字符串原样通过；非字符串记 `rawType`（object / number / array / null …）后**仍然照发**
+  （观察模式，等于只记账不拦），但 `rawType` 会随返回值一路带回。
+  设 `DOUYIN_STUDIO_TEXT_GUARD=block` 才真的拒发，错误串里带 `rawType`。
+- `lib/im-report.mjs`：`sendDirect()` 入口先过闸；返回值多一个可选 `rawType`。
+- `lib/autopilot.mjs`：`runReport()` 把 `rawType` 一并写进 `autopilot-log.jsonl` 与返回值
+  ——下次再出现 `[object Object]`，账里能直接看到"哪条链、原始类型是什么"。
+- `tests/text-guard.test.mjs`（新，6 例）：字符串通过、object 记为 object 且放行、
+  number/array/null 分得开、开 block 真拦、开 block 不误伤字符串、`where` 带得回去。
+
+### 兼容 / 风险
+
+- 默认（不设环境变量）= 行为与 0.4.5 完全一致，只是多一个返回值字段；
+  唯一可见差异是 `rawType !== 'string'` 的调用会多带一个键。
+- 观察一天后若 `autopilot-log.jsonl` 里没出现 `rawType`，说明链路本来就是干净的，
+  可以直接把开关当默认收紧，或者干脆删掉这一层。
+
 ## 0.4.5 — 2026-11-07（可观测 + 定时对齐；不新增能力）
 
 这一版全部来自实弹里"看得见但查不动"的四件事：54s 的 scan 花在哪、11-04 起连挂 11 次的

@@ -1,6 +1,6 @@
 {
   "name": "dsh-douyin-studio",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "description": "小汐的抖音工作室：收件箱、自主执行（自己回私信/发作品/报平安）、消息预算、刷视频和一页能调规矩的面板。引擎在 lib/，工具只做参数整形。",
   "type": "module",
   "main": "index.js",
