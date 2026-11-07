@@ -15,6 +15,7 @@
  */
 import { loadHostDeps } from './lib/hostdeps.mjs'
 import { registerTools } from './lib/tools.mjs'
+import { registerExtraTools } from './lib/tools-extra.mjs'
 import * as WATCH from './lib/watch.mjs'
 import * as DUTY from './lib/duty.mjs'
 import * as AUTOPILOT from './lib/autopilot.mjs'
@@ -24,6 +25,10 @@ import { checkOrigin } from './lib/guard.mjs'
 import { serveInbox, DEFAULT_TTL } from './lib/cache.mjs'
 import { readSettings, writeSettings, settingsEnv, DEFAULTS } from './lib/settings.mjs'
 import * as BUDGET from './lib/budget.mjs'
+import * as ROUNDS from './lib/roundstate.mjs'
+import { isKilled, killFile, killInfo, setKill } from './lib/killswitch.mjs'
+import { runJob } from './lib/jobs.mjs'
+import { readSnapshot } from './lib/dashboard.mjs'
 import { atomicWriteJson, readJsonSafe } from './lib/fsx.mjs'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -50,8 +55,8 @@ export const Config = !z ? undefined : z.object({
 	autoOpen: z.boolean().default(true).extra('volatile', true),
 	/** 一天最多回几条 */
 	perDay: z.natural().default(20).extra('volatile', true),
-	/** 来新私信就弹桌面通知（默认开） */
-	watchOn: z.boolean().default(true).extra('volatile', true),
+	/** 来新私信就弹桌面通知（2026-11-05 审计 B2-09 起默认关：新装的插件不在后台自己醒着；要就手动开） */
+	watchOn: z.boolean().default(false).extra('volatile', true),
 	/** 盯私信的间隔（秒，最小 30） */
 	watchEverySec: z.natural().default(90).extra('volatile', true),
 	/** 值班：定时去看一眼评论区（默认关——它自己会动手，得先点头） */
@@ -83,7 +88,7 @@ export function apply(ctx, config) {
 		profileDir: str(cfg.profileDir),
 		autoOpen: cfg.autoOpen === false ? false : true,
 		perDay: num(cfg.perDay, 20),
-		watchOn: cfg.watchOn === false ? false : true,
+		watchOn: cfg.watchOn === true,
 		watchEverySec: num(cfg.watchEverySec, 90),
 		dutyOn: cfg.dutyOn === true,
 		dutyEveryMin: num(cfg.dutyEveryMin, 30),
@@ -175,6 +180,10 @@ export function apply(ctx, config) {
 		render: (_a, v) => [{ type: 'text', text: typeof v === 'string' ? v : JSON.stringify(v, null, 2) }],
 	}
 	registerTools({ ctx, defineTool, textOutput, run, S, DUTY, WATCH })
+	/* 第二批（2026-11-05）：无人值守 / 互动灰度 / 作业账。拆文件是为了不让 tools.mjs 撞体量闸。 */
+	try { registerExtraTools({ ctx, defineTool, textOutput }) } catch (e) {
+		try { console.warn('[douyin-studio] 第二批工具没挂上：' + String((e && e.message) || e)) } catch { /* 日志挂了不该影响加载 */ }
+	}
 
 	/* ⭐ 2026-11-01：给设置页用的 HTTP 路由（面板「抖音工作室」）。
 	 *    只暴露**不花钱、不发表**的只读动作；发布类操作一律走工具/命令行，
@@ -307,6 +316,7 @@ export function apply(ctx, config) {
 		const desc = String(top.desc || '').replace(/\s+/g, ' ').slice(0, 60)
 		let r = null
 		let say = ''
+		let sayError = ''
 		if (tier === 'dm') {
 			r = await run(['share', '--aweme', top.aweme_id, '--to', st.ownerNick,
 				...(st.ownerSec ? ['--sec', st.ownerSec] : [])], { timeout: 180000 })
@@ -325,8 +335,20 @@ export function apply(ctx, config) {
 				 * 兜底不是瞎编：它就是这条的标题剪短，信息量够、也不会装成人说的话。 */
 				if (!say) say = '这条想给你看看：' + (desc.slice(0, 24) || '刚刷到的')
 				const dr = await run(['dm', '--to', st.ownerSec || st.ownerNick, '--text', say], { timeout: 180000 })
-				/* 带话没发出去 = 卡片旁边没字，等于白说。记下来，别静默。 */
-				if (!(dr && dr.ok)) say = ''
+				/* 带话没发出去 = 卡片旁边没字，等于白说。
+				 * 以前这里只 `say = ''`，失败原因随着变量一起消失 —— 用户只看到"视频没带字"，
+				 * 系统里查不出为什么。现在：① 只在**确认没发出去**的错上换目标重试一次；
+				 * ② 原因写进 notify-state，面板和自检都看得到。 */
+				if (!(dr && dr.ok)) {
+					sayError = String((dr && (dr.error || dr.why)) || '未知原因')
+					const preSend = /没打开|没有「|找不到|反查不到|正文是空/.test(sayError)
+					const alt = st.ownerSec ? st.ownerNick : st.ownerSec
+					if (preSend && alt) {
+						const dr2 = await run(['dm', '--to', alt, '--text', say], { timeout: 180000 })
+						if (dr2 && dr2.ok) { sayError = '' } else { sayError += ' / 换目标也失败：' + String((dr2 && (dr2.error || dr2.why)) || '未知') }
+					}
+					if (sayError) say = ''
+				}
 			}
 		} else {
 			/* 🔴 这里以前只传了 --uid，缺 --to（昵称）和 --sec，而 comment-at 三个都要，
@@ -345,8 +367,14 @@ export function apply(ctx, config) {
 				'--text', '这条我觉得你会喜欢：' + (desc.slice(0, 24) || '刷到的一个')], { timeout: 180000 })
 		}
 		const sent = Boolean(r && r.ok)
+		/* 顶层动作账：CLI 自己会记一条，但"分享卡片 + 补一句话"是一个组合动作，
+		 * 只有这里知道它整体成没成、补的话有没有发出去。 */
+		try {
+			const { logRun } = await import('./lib/runlog.mjs')
+			logRun({ kind: 'tellOwner', target: top.aweme_id, ok: sent, stage: tier, error: sayError || String((r && r.error) || '') })
+		} catch { /* 记账失败不影响主流程 */ }
 		if (sent) {
-			const next = { day: today, share: used.share + (tier === 'dm' ? 1 : 0), at: used.at + (tier === 'at' ? 1 : 0), say,
+			const next = { day: today, share: used.share + (tier === 'dm' ? 1 : 0), at: used.at + (tier === 'at' ? 1 : 0), say, sayError,
 				aweme: top.aweme_id, tier, notifiedAt: new Date().toISOString(),
 				/* 落账：今天发过哪几条。少了这一行，下一轮又挑同一条（分最高的那条永远是它）。 */
 				sent: [...already, String(top.aweme_id)].slice(-20) }
@@ -409,6 +437,14 @@ export function apply(ctx, config) {
 			return JSON.parse(readFileSync(p, 'utf8').replace(/^\uFEFF/, ''))
 		} catch { return dflt }
 	}
+
+	/* 调度的唯一读数口：面板、CLI、scanTick 都用 lib/dashboard.mjs 的同一份。
+	 * 只读，不触发任何动作；收件箱用内存缓存，绝不为了一个数字去刷抖音。 */
+	const scheduleSnapshot = (now = Date.now()) => {
+		const cache = readInboxCache()
+		return readSnapshot(now, (cache && cache.data) || null)
+	}
+
 	if (ctx.webServer && typeof ctx.webServer.register === 'function') {
 		ctx.effect(() => ctx.webServer.register({
 			kind: 'prefix',
@@ -432,9 +468,48 @@ export function apply(ctx, config) {
 						/* 2026-11-01：这里必须回**普通值**，不能回 `cfg.xxx` 本身（那是响应式包装，序列化成 `{}`）。 */
 						return sendJson(res, 200, { ok: true, ...S })
 					}
-					if (req.method === 'GET' && p === '/status') return sendJson(res, 200, await run(['status'], { timeout: 90000 }))
+					if (req.method === 'GET' && p === '/status') {
+						const st = await run(['status'], { timeout: 90000 })
+						/* 顺手把机器人自己的 uid 记下来：自检要用它判「有没有回错到自己」。
+						 * 只写 self.json，不碰 autopilot-state（那个文件归 autopilot 整份读改写）。 */
+						try {
+							await import('./lib/selfid.mjs').then((m) => m.remember(st))
+						} catch {
+							/* 记不住不影响面板读数 */
+						}
+						return sendJson(res, 200, st)
+					}
 					if (req.method === 'GET' && p === '/doctor') return sendJson(res, 200, await run(['doctor'], { timeout: 120000 }))
 					if (req.method === 'GET' && p === '/snapshots') return sendJson(res, 200, await run(['snapshot', 'list'], { timeout: 60000 }))
+
+					/* 调度读数 + 暂停开关。只影响「刷视频」这个只读动作，不碰发送。 */
+					if (req.method === 'GET' && p === '/schedule') return sendJson(res, 200, scheduleSnapshot())
+					if (req.method === 'POST' && p === '/schedule/pause') {
+						const body = await readBody(req)
+						ROUNDS.setPaused(Boolean(body && body.paused))
+						return sendJson(res, 200, scheduleSnapshot())
+					}
+					/* 总闸：面板这一下、工具那一层、CLI 那一条，读写的都是同一个 KILL 文件。 */
+					if (req.method === 'GET' && p === '/kill') {
+						return sendJson(res, 200, { ok: true, killed: isKilled(), info: killInfo(), file: killFile() })
+					}
+					if (req.method === 'POST' && p === '/kill') {
+						const body = await readBody(req)
+						setKill(Boolean(body && body.on), String((body && body.reason) || ''))
+						return sendJson(res, 200, { ok: true, killed: isKilled(), info: killInfo(), file: killFile() })
+					}
+					/* 值班日志：把动作账里跟「回/发/跳」有关的行给面板，不暴露全量。 */
+					if (req.method === 'GET' && p === '/runs') {
+						const n = Math.max(1, Math.min(60, Number(url.searchParams.get('limit') || 20)))
+						const { readRuns } = await import('./lib/runlog.mjs')
+						return sendJson(res, 200, {
+							ok: true,
+							items: readRuns(n).reverse().map((r) => ({
+								at: r.at, kind: r.kind, target: String(r.target || '').slice(0, 40),
+								ok: Boolean(r.ok), stage: r.stage || '', error: String(r.error || '').slice(0, 120),
+							})),
+						})
+					}
 
 					/* ── 面板要用的几条（2026-11-01 加）：全部只读 + 一条需要 confirm 的发送 ── */
 					if (req.method === 'GET' && p === '/dm') {
@@ -522,7 +597,7 @@ export function apply(ctx, config) {
 							refresh: startInboxRefresh,
 							ttl: INBOX_TTL,
 						})
-						return sendJson(res, 200, out.body)
+						return sendJson(res, 200, { ...out.body, kill: { on: isKilled(), info: killInfo() } })
 					}
 					/* 只要一个数字（tab 角标）—— 读缓存，**绝不触发刷新**。
 					 * 角标不值得为它跑一轮浏览器：打开设置页不是「我要看私信」。 */
@@ -960,13 +1035,13 @@ export function apply(ctx, config) {
 	 *   - 盯私信：默认开，但**延迟 90 秒**再跑第一下（刚开机浏览器还没起，抢没有意义）
 	 *   - 值班：默认关（它会自己动手，得先点头才开）
 	 * 这两个都是「自己会醒」的东西，所以卸载时必须停掉，别留着幽灵定时器。 */
-	if (S.watchOn) {
+	if (S.watchOn && !isKilled()) {
 		try { WATCH.start({ everySec: S.watchEverySec, quiet: true, startDelaySec: 90, onFresh: replyDmNow }) } catch { /* 盯梢起不来不该挡住插件 */ }
 	}
 	/* 值班：配置里开着，或面板上勾了「自己回评论」，都要起 */
 	try {
 		const st0 = readSettings()
-		if (S.dutyOn || st0.autoComment) {
+		if ((S.dutyOn || st0.autoComment) && !isKilled()) {
 			DUTY.start({ everyMin: S.dutyEveryMin, autoReply: st0.autoComment || S.dutyAutoReply, maxPerRun: 2 })
 		}
 	} catch { /* 设置读不到就不起，别把插件拖挂 */ }
@@ -974,7 +1049,7 @@ export function apply(ctx, config) {
 	/* 自主执行：定时器常驻，每轮自己看开关 —— 关着就是空转，不花钱也不发东西。
 	 * 2026-11-04 从 5 分钟放到 30 分钟：主人说私信不用一直盯，跟回评论一个节奏就行。
 	 * 这样面板上开/关立刻生效，不需要重启。 */
-	try { AUTOPILOT.start({ everyMin: 30, runCli: run }) } catch { /* 起不来不影响手动 */ }
+	try { if (!isKilled()) AUTOPILOT.start({ everyMin: 30, runCli: run }) } catch { /* 起不来不影响手动 */ }
 
 	/* 每天自动刷几轮：轮次由 lib/schedule.mjs 铺开（纯函数，单测钉着）。
 	 * 只有「现在轮到了、今天还没刷过这一轮」才真去刷；跨天清零。
@@ -982,28 +1057,75 @@ export function apply(ctx, config) {
 	/* 轮次落盘（2026-11-04）：以前存在内存里，DSH 一重启就归零，
 	 * 当天已刷过的那几轮会被当成没刷过再刷一遍。 */
 	const scanTick = async () => {
+		/* 总闸：停损开着就整轮不跑（不刷、不写状态）。只读也停，是因为出事时不想再花额度。 */
+		if (isKilled()) return
+		let snap
+		try { snap = scheduleSnapshot() } catch { return }
+		const next = snap.next || {}
+		const priorFailures = snap.failures
+		const prev = ROUNDS.readState()
+		/* 跨过 await 之后再写状态，一律走单写者队列：否则暂停 / 刷新 / 下一轮
+		 * 同时到达时，后写的一份会把先写的那一份整块盖掉。 */
+		const sameDay = (cur) => (cur && cur.day === snap.day
+			? cur : { day: snap.day, done: 0, failures: 0 })
+		await ROUNDS.updateHealth((cur) => ({
+			...cur,
+			level: next.level === 'stop' ? 'stop' : next.level === 'warn' ? 'warn' : 'ok',
+			failures: priorFailures, action: next.action,
+			reason: String(next.reason || next.label || ''),
+			at: new Date().toISOString(),
+		}))
+
+		/* 跳过类：不消耗轮次，但要留痕。同一个 (day, index, 原因) 只写一行，
+		 * 否则 tick 每 5 分钟来一次，rounds.jsonl 会被重复行刷爆。 */
+		if (next.action === 'pause' || next.action === 'stop' || next.action === 'skip-quota') {
+			const key = snap.day + ':' + next.index + ':' + next.action
+			if (String(prev.lastSkipKey || '') !== key) {
+				ROUNDS.appendRound({ round: next.index, ok: false, skipped: next.action, error: next.reason })
+				await ROUNDS.updateState((cur0) => ({ ...sameDay(cur0), lastSkipKey: key }))
+			}
+			return
+		}
+		if (next.action !== 'run') return
+
+		/* 先记一笔再刷：宁可这一轮没刷成，也不要因为中途崩了就在同一个点上反复重试。 */
+		const t0 = Date.now()
+		await ROUNDS.updateState((cur0) => ({
+			...sameDay(cur0), done: next.index + 1, failures: 0,
+			lastAt: new Date().toISOString(), lastSkipKey: '',
+		}))
 		try {
-			const st = readSettings()
-			const { dayKey, dueAt } = await import('./lib/schedule.mjs')
-			const { homeDir } = await import('./lib/budget.mjs')
-			const file = join(homeDir(), 'scan-state.json')
-			const today = dayKey(new Date())
-			const prev = readJsonSafe(file, { day: '', done: 0 }) || { day: '', done: 0 }
-			const done = prev.day === today ? Math.max(0, Number(prev.done) || 0) : 0
-			const d = dueAt(new Date(), {
-				rounds: st.scanRounds, from: st.scanFrom, to: st.scanTo, everyMin: st.scanEveryMin,
-			}, done)
-			if (!d.due) return
-			/* 先记一笔再刷：宁可这一轮没刷成，也不要因为中途崩了就在同一个点上反复重试。 */
-			atomicWriteJson(file, { day: today, done: d.index + 1 })
-			await startPicksCollect()
-		} catch { /* 刷失败不该连累别的定时器 */ }
+			/* 一轮刷完 = 一个作业：失败退避重试两次，每一步之前都看总闸（lib/jobs.mjs）。 */
+			const r = await runJob('scan-round', startPicksCollect, { tries: 2 })
+			const ok = Boolean(r && r.ok !== false && !r.error)
+			const err = ok ? '' : String((r && (r.error || r.stage)) || '没拿到结果')
+			const failures = ok ? 0 : priorFailures + 1
+			await ROUNDS.updateState((cur0) => ({ ...sameDay(cur0), failures, lastError: err }))
+			ROUNDS.appendRound({
+				round: next.index, ok, took: Date.now() - t0,
+				seen: Math.max(0, Number(r && r.fetched) || 0),
+				kept: Math.max(0, Number(r && r.picked) || 0),
+				error: err,
+			})
+			await ROUNDS.updateHealth((cur) => ({
+				...cur, level: ok ? 'ok' : failures >= 6 ? 'stop' : failures >= 3 ? 'warn' : 'ok',
+				failures, action: ok ? 'run-ok' : 'run-fail', reason: err || '刷完了',
+				at: new Date().toISOString(),
+			}))
+		} catch (e) {
+			const err = String((e && e.message) || e)
+			await ROUNDS.updateState((cur0) => ({
+				...sameDay(cur0), failures: priorFailures + 1, lastError: err,
+			}))
+			ROUNDS.appendRound({ round: next.index, ok: false, took: Date.now() - t0, error: err })
+		}
 	}
+
 	let scanTimer = null
 	try {
-		scanTimer = setInterval(scanTick, 600000)
+		scanTimer = setInterval(scanTick, 300000)
 		if (scanTimer.unref) scanTimer.unref()
-		const first = setTimeout(scanTick, 180000)
+		const first = setTimeout(scanTick, 60000)
 		if (first.unref) first.unref()
 	} catch { /* 起不来就只留手动 */ }
 

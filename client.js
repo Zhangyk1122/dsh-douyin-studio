@@ -34,364 +34,12 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
     const API = '/api/douyin-studio'
-    const PANEL_BUILD = 35
+    const PANEL_BUILD = 37
     const { useState, useEffect, useRef, useCallback } = React
 
-    /* ── 样式 ────────────────────────────────────────────────────────────
-     * 中性面全用 currentColor 混，跟着宿主文字色走；只有语义色是写死的。
-     * 亮/暗在挂载时量一次宿主背景，写 data-theme。 */
-    const CSS = `
-[data-dys]{
-  --dys-fs:13px;
-  --dys-r:12px;
-  --dys-ink:currentColor;
-  --dys-line:color-mix(in oklab, currentColor 13%, transparent);
-  --dys-line2:color-mix(in oklab, currentColor 20%, transparent);
-  --dys-fill:color-mix(in oklab, currentColor 4%, transparent);
-  --dys-fill2:color-mix(in oklab, currentColor 7.5%, transparent);
-  --dys-lead:color-mix(in oklab, currentColor 9.5%, transparent);
-  --dys-raise:color-mix(in oklab, currentColor 14%, transparent);
-  --dys-dim:.58;
-  --dys-blue:#6f9ff0;
-  --dys-on-accent:#0c1017;
-  --dys-teal:#5fc3a4;
-  --dys-violet:#a893e6;
-  --dys-amber:#dbae6b;
-  --dys-ok:#5fbf82;
-  --dys-bad:#ef8175;
-  box-sizing:border-box;width:100%;max-width:1220px;padding:2px 2px 12px;
-  display:flex;flex-direction:column;gap:14px;
-  font-size:var(--dys-fs);line-height:1.55;color:var(--dys-ink);
-  font-variant-numeric:tabular-nums;
-}
-[data-dys] *{box-sizing:border-box;}
-/* 浅色下卡片白面、内嵌面板灰面 —— 共用色阶会把主卡压得比普通卡更暗。 */
-[data-dys][data-theme="light"]{
-  --dys-dim:.62;
-  --dys-fill:#ffffff;
-  --dys-fill2:#f1f2f4;
-  --dys-lead:#ffffff;
-  --dys-raise:#ffffff;
-  --dys-blue:#2f6fd0;
-  --dys-on-accent:#ffffff;
-  --dys-teal:#0f7a5c;
-  --dys-violet:#5a45b0;
-  --dys-amber:#9a6410;
-  --dys-ok:#1c7d46;
-  --dys-bad:#b83a24;
-}
-
-[data-dys-grid]{display:grid;grid-template-columns:minmax(0,1.06fr) minmax(0,.94fr);
-  gap:14px;align-items:start;}
-[data-dys-grid][data-cols="1"]{grid-template-columns:minmax(0,1fr);}
-[data-dys-col]{display:flex;flex-direction:column;gap:14px;min-width:0;}
-
-/* ── 卡片：只有两级。主卡（收件箱）提亮一档，其余一律同款，不靠彩线区分 ── */
-[data-dys-card]{position:relative;display:flex;flex-direction:column;gap:12px;min-width:0;padding:15px 17px 16px;border-radius:var(--dys-r);border:1px solid var(--dys-line);background:var(--dys-fill);}
-[data-dys-card][data-lead]{background:var(--dys-lead);border-color:var(--dys-line2);}
-/* 三种卡三种密度：列表要挤（多行），表单要松（手指点得准），数字要立（一眼看大小） */
-[data-dys-card][data-kind="form"]{padding:16px 18px 17px;gap:14px;}
-[data-dys-card][data-kind="metric"]{padding:18px 18px 16px;gap:14px;}
-/* ── 分段控件：一级三件事 + 更多（只有两层，不许第三层）── */
-/* fit-content：只有四个片段却铺满整行，右边会空出一大片，像没做完。 */
-[data-dys-seg]{display:flex;gap:3px;flex-wrap:wrap;width:fit-content;max-width:100%;
-  padding:3px;border-radius:12px;background:var(--dys-fill2);border:1px solid var(--dys-line);}
-[data-dys-seg][data-dys-seg2]{margin-top:-6px;background:transparent;border:0;padding:0 3px;}
-[data-dys-seg] > button{flex:0 0 auto;appearance:none;cursor:pointer;font:inherit;font-size:12px;line-height:1.5;
-  padding:5px 12px;border:0;border-radius:9px;background:transparent;color:var(--dys-dim);white-space:nowrap;
-  transition:color .12s ease, background .12s ease, box-shadow .12s ease;}
-[data-dys-seg] > button:hover{color:var(--dys-ink);background:color-mix(in oklab, var(--dys-ink) 5%, transparent);}
-[data-dys-seg] > button[data-on]{background:var(--dys-fill);color:var(--dys-ink);font-weight:600;
-  box-shadow:0 1px 2px rgba(0,0,0,.16), inset 0 0 0 1px var(--dys-line2);}
-/* 角标：有数字才亮，没数字就安静。蓝字蓝底 —— 比实心块轻，比纯数字显眼。 */
-[data-dys-seg] i{font-style:normal;font-size:10px;line-height:1;padding:2px 4px;margin-left:5px;border-radius:6px;
-  background:color-mix(in oklab, var(--dys-blue) 15%, transparent);
-  color:color-mix(in oklab, var(--dys-blue) 88%, currentColor);}
-/* 内容区定高：切 tab 页面不跳，全局只有一个滚动条（就在这个框里）。
-   一张卡撑满；多张卡按 --dys-cols（根节点给的列数）排成网格 —— 宽屏两列，窄屏一列。 */
-[data-dys-view]{height:clamp(320px,46vh,480px);overflow:auto;border-radius:12px;
-  display:grid;grid-template-columns:repeat(var(--dys-cols,1),minmax(0,1fr));
-  align-content:start;gap:16px;
-  scrollbar-width:thin;scrollbar-color:color-mix(in oklab, currentColor 22%, transparent) transparent;}
-/* 主卡横跨整行：列表类卡片上了封面之后需要宽度，挤在半栏里每行只剩一百多像素。 */
-[data-dys-view] > [data-dys-card][data-lead]{grid-column:1 / -1;}
-/* 只有一张卡的时候撑满（免得卡外露一块洞），并且横跨两列 */
-[data-dys-view] > *:only-child{min-height:100%;grid-column:1 / -1;}
-/* 只有真的滚起来了才淡出底部。不滚也淡 = 把卡片的底边擦掉，看着像缺一条边。 */
-[data-dys-view][data-more]{
-  -webkit-mask-image:linear-gradient(to bottom, #000 0, #000 calc(100% - 22px), transparent 100%);
-  mask-image:linear-gradient(to bottom, #000 0, #000 calc(100% - 22px), transparent 100%);}
-/* 表单 / 数字类不封顶：它们本来就短，撑到 300px 只是给卡里留一块空白。
-   列表类（挑 / 待办 / 今天 / 刷视频 / 后台）才需要定高 —— 那些是会越滚越长的。 */
-[data-dys-view]::-webkit-scrollbar{width:8px;}
-[data-dys-view]::-webkit-scrollbar-thumb{border-radius:999px;background:color-mix(in oklab, currentColor 16%, transparent);}
-[data-dys-view]::-webkit-scrollbar-thumb:hover{background:color-mix(in oklab, currentColor 26%, transparent);}
-[data-dys-view]::-webkit-scrollbar-track{background:transparent;}
-/* 主人身份那一格：红绿灯 + 一句为什么。
-   颜色只表状态 —— 绿=认到了，红=没认到（并说明是没填、没聊过还是重名）。 */
-[data-dys-own]{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;
-  background:var(--dys-fill2);border:1px solid var(--dys-line);}
-[data-dys-own][data-level="green"]{border-color:color-mix(in oklab, var(--dys-ok) 50%, var(--dys-line));
-  background:color-mix(in oklab, var(--dys-ok) 9%, var(--dys-fill2));}
-[data-dys-own][data-level="red"]{border-color:color-mix(in oklab, var(--dys-bad) 50%, var(--dys-line));
-  background:color-mix(in oklab, var(--dys-bad) 9%, var(--dys-fill2));}
-[data-dys-dot]{flex:0 0 9px;width:9px;height:9px;border-radius:50%;background:var(--dys-dim);}
-[data-dys-own][data-level="green"] [data-dys-dot]{background:var(--dys-ok);box-shadow:0 0 0 3px color-mix(in oklab, var(--dys-ok) 22%, transparent);}
-[data-dys-own][data-level="red"] [data-dys-dot]{background:var(--dys-bad);box-shadow:0 0 0 3px color-mix(in oklab, var(--dys-bad) 22%, transparent);}
-[data-dys-own] > div{flex:1 1 auto;min-width:0;}
-[data-dys-own] b{font-size:12px;font-weight:620;}
-[data-dys-own] span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-
-/* 设置卡内部四页 */
-[data-dys-tabs]{display:flex;gap:2px;padding:2px;border-radius:10px;background:var(--dys-fill2);}
-[data-dys-tab]{flex:1 1 0;appearance:none;cursor:pointer;font:inherit;font-size:11.5px;line-height:1.5;
-  padding:4px 6px;border:0;border-radius:8px;background:transparent;color:var(--dys-dim);
-  display:flex;align-items:center;justify-content:center;gap:4px;}
-[data-dys-tab]:hover{color:var(--dys-ink);}
-[data-dys-tab][data-on]{background:var(--dys-fill);color:var(--dys-ink);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.14);}
-[data-dys-tab] > i{font-style:normal;font-size:10px;opacity:.5;}
-
-/* 头部：标题不缩、不换行；工具区靠右，放不下就整体掉下一行（标题被压成竖排是排版事故）。 */
-[data-dys-head]{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;min-width:0;}
-[data-dys-title]{display:flex;align-items:center;gap:7px;flex:0 0 auto;white-space:nowrap;font-size:12.5px;font-weight:600;color:color-mix(in oklab, currentColor 86%, transparent);}
-[data-dys-card][data-lead] [data-dys-title]{font-size:13.5px;font-weight:650;color:var(--dys-ink);}
-[data-dys-sub]{font-size:11.5px;color:var(--dys-dim);font-weight:400;min-width:0;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-/* basis 必须是 0：auto 会拿副标题整句宽参与换行，超宽时被顶下去的是按钮。 */
-[data-dys-grow]{flex:1 1 0;min-width:0;}
-[data-dys-tools]{margin-left:auto;display:flex;align-items:center;gap:6px;
-  flex-wrap:wrap;justify-content:flex-end;min-width:0;max-width:100%;}
-
-/* 图标：统一 22×22 的软底方块，只有主卡那一个用强调色 —— 加图形但不制造第二个焦点 */
-[data-dys-ico]{width:22px;height:22px;border-radius:7px;flex:0 0 auto;display:grid;place-items:center;
-  background:var(--dys-fill2);color:color-mix(in oklab, currentColor 62%, transparent);}
-[data-dys-card][data-lead] [data-dys-ico]{background:color-mix(in oklab, var(--dys-blue) 26%, transparent);
-  color:var(--dys-blue);}
-[data-dys-svg]{display:block;flex:0 0 auto;}
-[data-dys-dim]{color:var(--dys-dim);}
-[data-dys-sm]{font-size:11.5px;}
-[data-dys-xs]{font-size:11px;}
-
-/* ── 头部：去渐变，头像用强调色的低透明度底 ── */
-[data-dys-hero]{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:14px;align-items:center;padding:15px 17px;border-radius:var(--dys-r);border:1px solid var(--dys-line);background:radial-gradient(120% 150% at 10% 0%, color-mix(in oklab, var(--dys-blue) 14%, transparent), transparent 60%), var(--dys-fill);}
-[data-dys-ava]{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-size:16px;font-weight:650;background:color-mix(in oklab, var(--dys-blue) 22%, transparent);color:var(--dys-blue);}
-[data-dys-name]{font-size:15px;font-weight:650;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
-[data-dys-pills]{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:5px;}
-[data-dys-stats]{display:flex;gap:18px;align-items:center;}
-[data-dys-stat]{display:flex;flex-direction:column;align-items:flex-end;gap:1px;min-width:52px;}
-[data-dys-stat] b{display:block;font-size:15px;font-weight:600;line-height:1.3;}
-[data-dys-stat] span{font-size:11px;color:var(--dys-dim);}
-[data-dys-herobar]{grid-column:1 / -1;display:flex;align-items:center;gap:10px;margin-top:-2px;padding-top:10px;border-top:1px solid var(--dys-line);}
-[data-dys-herobar] > span{font-size:10.5px;letter-spacing:.06em;color:var(--dys-dim);white-space:nowrap;}
-[data-dys-herobar] > i{flex:1 1 0;height:4px;border-radius:999px;background:var(--dys-fill2);overflow:hidden;}
-[data-dys-herobar] > i > b{display:block;height:100%;border-radius:999px;transition:width .3s ease;}
-
-
-[data-dys][data-cols="1"] [data-dys-hero]{grid-template-columns:auto minmax(0,1fr);row-gap:12px;}
-[data-dys][data-cols="1"] [data-dys-stats]{grid-column:1 / -1;flex-wrap:wrap;gap:14px 20px;}
-[data-dys][data-cols="1"] [data-dys-stat]{align-items:flex-start;}
-
-/* ── 状态：圆点着色，文字中性 ── */
-[data-dys-pill]{display:inline-flex;align-items:center;gap:5px;font-size:11px;line-height:1.7;
-  color:color-mix(in oklab, currentColor 74%, transparent);white-space:nowrap;}
-[data-dys-pill] > i{width:6px;height:6px;border-radius:999px;flex:0 0 auto;
-  background:color-mix(in oklab, currentColor 26%, transparent);}
-[data-dys-pill][data-tone="ok"] > i{background:var(--dys-ok);}
-[data-dys-pill][data-tone="warn"] > i{background:var(--dys-amber);}
-[data-dys-pill][data-tone="bad"] > i{background:var(--dys-bad);}
-[data-dys-pill][data-tone="accent"] > i{background:var(--dys-blue);}
-[data-dys-pill][data-strong]{color:var(--dys-ink);}
-
-/* ── 标签：纯中性，不带颜色 ── */
-[data-dys-tag]{display:inline-flex;align-items:center;padding:0 6px;border-radius:6px;
-  font-size:10.5px;line-height:1.75;background:var(--dys-fill2);
-  color:color-mix(in oklab, currentColor 66%, transparent);white-space:nowrap;}
-
-/* ── 按钮：三级（primary / secondary / ghost），danger 只在待确认时出现 ── */
-[data-dys-btn]{appearance:none;cursor:pointer;font:inherit;font-size:12px;line-height:1.5;
-  padding:4px 11px;border-radius:9px;border:1px solid var(--dys-line2);
-  background:transparent;color:var(--dys-ink);white-space:nowrap;
-  display:inline-flex;align-items:center;justify-content:center;gap:5px;
-  transition:background .12s ease, border-color .12s ease, transform .08s ease;}
-[data-dys-btn]:hover{background:var(--dys-fill2);}
-[data-dys-btn]:active{transform:translateY(.5px);}
-[data-dys-btn][data-primary]{border-color:transparent;background:var(--dys-blue);
-  color:var(--dys-on-accent);font-weight:600;}
-[data-dys-btn][data-primary]:hover{background:color-mix(in oklab, var(--dys-blue) 86%, #000);}
-[data-dys-btn][data-armed]{border-color:var(--dys-bad);
-  background:color-mix(in oklab, var(--dys-bad) 16%, transparent);color:var(--dys-bad);font-weight:600;}
-[data-dys-btn][data-ghost]{border-color:transparent;color:var(--dys-dim);padding:3px 7px;}
-
-/* ── 挑：一条一行，右侧只放两个动作（发我 / 不要） ── */
-[data-dys-pick]{display:grid;grid-template-columns:56px minmax(0,1fr) auto;gap:6px 10px;align-items:start;
-  padding:9px 0;border-bottom:1px solid var(--dys-line);}
-[data-dys-pick]:last-child{border-bottom:0;}
-/* 没有封面的行：不留空灰块，但把左边距补上 —— 一个列表只能有一条左边缘，
-   否则有无封面的行会参差不齐，比空着更难看 */
-[data-dys-pick][data-nocover]{grid-template-columns:minmax(0,1fr) auto;padding-left:66px;}
-/* 封面：判断「好不好看」有一半在这张图上。加载失败就退成色块，不显示破图标。 */
-[data-dys-thumb]{width:56px;height:56px;border-radius:8px;object-fit:cover;display:block;
-  background:var(--dys-fill2);grid-row:1 / span 2;}
-[data-dys-pickt]{font-size:12.5px;line-height:1.45;overflow:hidden;display:-webkit-box;
-  -webkit-line-clamp:2;-webkit-box-orient:vertical;}
-[data-dys-pickm]{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;}
-[data-dys-pickacts]{display:flex;align-items:center;gap:8px;flex:0 0 auto;}
-/* 「不要」得看得见 —— 默认 ghost 太淡，在这一屏它是个真实选项 */
-[data-dys-pickacts] [data-dys-btn][data-ghost]{font-size:14px;line-height:1;padding:4px 8px;
-  color:color-mix(in oklab, currentColor 70%, transparent);}
-[data-dys-btn][data-ghost]:hover{color:var(--dys-ink);background:var(--dys-fill2);}
-[data-dys-btn:disabled]{opacity:.4;cursor:default;}
-[data-dys-row]{display:flex;gap:7px;align-items:center;flex-wrap:wrap;}
-
-/* ── 额度条：颜色只表达「还剩多少」，渠道靠文字区分 ── */
-[data-dys-bar]{position:relative;height:4px;border-radius:999px;background:var(--dys-fill2);overflow:hidden;flex:1 1 auto;}
-[data-dys-bar] > i{position:absolute;inset:0 auto 0 0;border-radius:999px;background:var(--dys-ac, var(--dys-blue));}
-[data-dys-budgetrow]{display:grid;grid-template-columns:64px minmax(0,1fr) 62px;gap:10px;align-items:center;}
-[data-dys-budgetrow][data-full] > b{color:var(--dys-bad);}
-[data-dys-budgetrow] > b{font-weight:550;font-size:12px;text-align:right;}
-
-/* ── 收件箱 ── */
-[data-dys-tabs]{display:flex;gap:2px;padding:2px;border-radius:10px;background:var(--dys-fill2);}
-[data-dys-tab]{flex:1 1 0;appearance:none;cursor:pointer;font:inherit;font-size:12px;
-  padding:4px 6px;border-radius:8px;border:0;background:transparent;color:var(--dys-dim);white-space:nowrap;
-  display:inline-flex;align-items:center;justify-content:center;gap:5px;min-width:0;}
-[data-dys-tab] > span{overflow:hidden;text-overflow:ellipsis;}
-[data-dys-tab][data-on]{background:var(--dys-raise);color:var(--dys-ink);font-weight:600;
-  box-shadow:0 1px 2px rgba(0,0,0,.14);}
-[data-dys-tab] > i{font-style:normal;margin-left:5px;font-size:11px;opacity:.75;}
-
-/* ── 自主执行：开关行 ─────────────────────────────────────────────────
- * 一行一件事：图标 / 名称+一句人话 / 开关。开关打开后才展开它的规矩。
- * 这里不放输入框——回什么是它自己的事，人只定边界。 */
-[data-dys-auto]{display:flex;flex-direction:column;min-width:0;}
-[data-dys-autoblock]{border-bottom:1px solid var(--dys-line);padding:3px 0;}
-[data-dys-autoblock]:last-child{border-bottom:0;}
-[data-dys-autorow]{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:9px;align-items:center;padding:5px 0;}
-[data-dys-knobs]{display:flex;flex-wrap:wrap;gap:8px 18px;padding:2px 0 10px 31px;}
-[data-dys-knob]{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--dys-dim);min-width:0;}
-[data-dys-knob] > span{white-space:nowrap;}
-[data-dys-knob] [data-dys-in]{width:108px;}
-[data-dys-knob] select[data-dys-in]{width:auto;min-width:108px;}
-[data-dys-ico][data-accent]{background:color-mix(in oklab, var(--dys-blue) 24%, transparent);color:var(--dys-blue);}
-[data-dys-switch]{appearance:none;cursor:pointer;padding:0;position:relative;flex:0 0 auto;
-  width:34px;height:19px;border-radius:999px;border:1px solid var(--dys-line2);background:var(--dys-fill2);
-  transition:background .15s ease, border-color .15s ease;}
-[data-dys-switch] > i{position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:999px;
-  background:color-mix(in oklab, currentColor 45%, transparent);
-  transition:left .15s ease, background .15s ease;}
-[data-dys-switch][data-on]{background:var(--dys-blue);border-color:transparent;}
-[data-dys-switch][data-on] > i{left:17px;background:var(--dys-on-accent);}
-
-[data-dys-ibx]{display:flex;flex-direction:column;gap:2px;min-height:60px;}
-[data-dys-item]{display:grid;grid-template-columns:6px minmax(0,1fr);gap:9px;
-  padding:8px 8px 8px 0;border-radius:10px;cursor:pointer;border:1px solid transparent;}
-[data-dys-item]:hover{background:var(--dys-fill2);}
-[data-dys-item][data-open]{background:var(--dys-fill2);border-color:var(--dys-line);}
-/* 行首标记是「圆点」不是「竖条」：竖条一屏三根就等于没标记，还抢标题。
-   点跟标题那一行对齐（行高 19px，点 6px → margin-top 6px 正好居中）。 */
-[data-dys-mark]{width:6px;height:6px;align-self:start;margin-top:6px;
-  border-radius:999px;background:color-mix(in oklab, currentColor 18%, transparent);}
-[data-dys-item][data-worth="1"] [data-dys-mark]{background:color-mix(in oklab, var(--dys-blue) 55%, transparent);}
-[data-dys-item][data-worth="2"] [data-dys-mark]{background:var(--dys-blue);}
-[data-dys-itemtop]{display:flex;align-items:baseline;gap:7px;min-width:0;}
-[data-dys-itemtop] > b{font-weight:600;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:56%;}
-[data-dys-itemtop] > time{margin-left:auto;font-size:11px;color:var(--dys-dim);font-style:normal;flex:0 0 auto;}
-[data-dys-prev]{font-size:12px;color:color-mix(in oklab, currentColor 82%, transparent);
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-[data-dys-why]{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px;}
-[data-dys-body]{display:flex;flex-direction:column;gap:9px;padding:4px 2px 6px 0;}
-[data-dys-hist]{display:flex;flex-direction:column;gap:3px;max-height:150px;overflow:auto;
-  padding:7px 9px;border-radius:9px;background:var(--dys-fill2);}
-[data-dys-line]{display:flex;gap:7px;font-size:11.5px;}
-[data-dys-line] > span:first-child{flex:0 0 30px;color:var(--dys-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-[data-dys-ta]{width:100%;resize:vertical;min-height:56px;font:inherit;font-size:12.5px;line-height:1.5;
-  padding:7px 9px;border-radius:9px;border:1px solid var(--dys-line2);
-  background:color-mix(in oklab, currentColor 6%, transparent);color:var(--dys-ink);}
-[data-dys-ta]:focus{outline:none;border-color:color-mix(in oklab, var(--dys-blue) 62%, transparent);
-  box-shadow:0 0 0 3px color-mix(in oklab, var(--dys-blue) 16%, transparent);}
-[data-dys-said]{padding:7px 9px;border-radius:9px;font-size:11.5px;color:var(--dys-ok);
-  background:color-mix(in oklab, var(--dys-ok) 10%, transparent);}
-
-/* 整行宽的字段（布尔开关）：夹在两列里会跟旁边的输入框对不齐 */
-[data-dys-field][data-wide]{grid-column:1 / -1;}
-[data-dys-in][type="number"]{appearance:auto;-moz-appearance:auto;padding-right:2px;} /* 数字框留住上下箭头 */
-/* 布尔字段：一个勾 + 一句状态。勾选本身就是状态，不用再加第二个提示点。 */
-[data-dys-check]{display:inline-flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;min-width:0;}
-[data-dys-check] > input{width:14px;height:14px;accent-color:var(--dys-blue);cursor:pointer;flex:0 0 auto;margin:0;}
-[data-dys-check] > span{color:color-mix(in oklab, currentColor 78%, transparent);}
-/* 输入框 = 第三个表面，不能和卡片同色：以前 transparent，空框只剩一条 1px 线，
-   看着像塌下去的洞。选择器加元素名是为了压住宿主对 input 的默认背景。 */
-input[data-dys-in],select[data-dys-in]{appearance:none;font:inherit;font-size:12px;line-height:1.5;padding:3px 8px;border-radius:8px;
-  border:1px solid var(--dys-line2);background:color-mix(in oklab, currentColor 6%, transparent);color:inherit;min-width:0;}
-input[data-dys-in]:focus,select[data-dys-in]:focus{outline:none;border-color:color-mix(in oklab, var(--dys-blue) 62%, transparent);
-  box-shadow:0 0 0 3px color-mix(in oklab, var(--dys-blue) 16%, transparent);}
-/* 占位符用 --dys-dim：深 #919398(5.5:1)、浅 #727272(4.9:1)，两边都过 AA */
-input[data-dys-in]::placeholder{color:var(--dys-dim);}
-
-/* ── 列表 / 时间线 ── */
-[data-dys-list]{display:flex;flex-direction:column;gap:1px;}
-[data-dys-li]{display:grid;grid-template-columns:6px minmax(0,1fr) auto;gap:9px;align-items:baseline;
-  padding:5.5px 3px;font-size:12px;}
-[data-dys-li] + [data-dys-li]{border-top:1px solid var(--dys-line);}
-[data-dys-dot]{width:6px;height:6px;border-radius:999px;align-self:center;
-  background:color-mix(in oklab, currentColor 22%, transparent);}
-[data-dys-dot][data-ok]{background:var(--dys-ok);}
-[data-dys-dot][data-bad]{background:var(--dys-bad);}
-[data-dys-dot][data-warn]{background:var(--dys-amber);}
-[data-dys-dot][data-accent]{background:var(--dys-blue);}
-[data-dys-li] > time{font-size:11px;color:var(--dys-dim);font-style:normal;}
-[data-dys-ell]{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-[data-dys-li-main]{display:flex;gap:5px;align-items:baseline;min-width:0;}
-
-/* ── 趋势 ── */
-[data-dys-trend]{display:flex;align-items:flex-end;gap:12px;}
-[data-dys-trend] svg{flex:1 1 auto;height:44px;overflow:visible;}
-[data-dys-empty]{padding:12px 2px 4px;font-size:12px;color:var(--dys-dim);text-align:center;}
-[data-dys-empty] > div + div{margin-top:9px;}
-[data-dys-err]{font-size:11.5px;color:var(--dys-bad);}
-[data-dys-note]{font-size:11.5px;color:var(--dys-dim);}
-[data-dys-pre]{max-height:220px;overflow:auto;font-size:11px;line-height:1.45;
-  padding:8px 10px;border-radius:9px;background:var(--dys-fill2);margin:0;white-space:pre-wrap;word-break:break-word;}
-[data-dys-skel]{height:44px;border-radius:9px;
-  background:linear-gradient(90deg, var(--dys-fill2), var(--dys-fill), var(--dys-fill2));
-  background-size:200% 100%;animation:dys-skel 1.3s ease-in-out infinite;}
-@keyframes dys-skel{0%{background-position:0 0}100%{background-position:-200% 0}}
-@media (prefers-reduced-motion: reduce){[data-dys-skel]{animation:none;}}
-
-/* ── 诊断抽屉：调试信息不再占一级界面 ── */
-[data-dys-diag]{border:1px solid var(--dys-line);border-radius:12px;padding:9px 13px;
-  font-size:11.5px;color:var(--dys-dim);}
-[data-dys-diag] > summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:7px;}
-[data-dys-diag] > summary::-webkit-details-marker{display:none;}
-[data-dys-diag] > summary::before{content:'▸';font-size:10px;display:inline-block;transition:transform .12s ease;}
-[data-dys-diag][open] > summary::before{transform:rotate(90deg);}
-[data-dys-diag] > summary:hover{color:var(--dys-ink);}
-[data-dys-diagbody]{display:flex;flex-direction:column;gap:6px;margin-top:9px;padding-top:9px;
-  border-top:1px solid var(--dys-line);}
-[data-dys-kv]{display:grid;grid-template-columns:88px minmax(0,1fr);gap:8px;font-size:11.5px;}
-[data-dys-kv] > span:first-child{color:var(--dys-dim);}
-[data-dys-kv] > span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-
-/* ── 表单：字段用「描述表」驱动，别再为每个输入框写一遍 JSX ── */
-[data-dys-field]{display:grid;grid-template-columns:92px minmax(0,1fr);gap:8px;align-items:center;}
-/* 两列字段网格：刷视频这类「四个短参数」用它，标签窄一点，
- * 比原来四个只有 placeholder 的光秃输入框更容易看懂哪个是哪个。 */
-[data-dys-formgrid]{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 10px;}
-[data-dys-formgrid] [data-dys-field]{grid-template-columns:74px minmax(0,1fr);}
-[data-dys][data-cols="1"] [data-dys-formgrid]{grid-template-columns:repeat(2,minmax(0,1fr));}
-[data-dys-flabel]{font-size:11.5px;color:var(--dys-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-[data-dys-group]{grid-column:1 / -1;margin:4px 0 -2px;padding-top:6px;border-top:1px dashed var(--dys-line);
-  font-size:11px;font-weight:650;letter-spacing:.04em;color:var(--dys-dim);}
-[data-dys-col] > [data-dys-group]:first-child,[data-dys-formgrid] > [data-dys-group]:first-child{margin-top:0;padding-top:0;border-top:0;}
-/* 设置区：宽的时候两列排，别做成一面填不满的表单墙；窄的时候自动掉回一列。 */
-[data-dys-formgrid]{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
-  gap:7px 16px;align-items:start;}
-[data-dys-formgrid] [data-dys-field]{grid-template-columns:minmax(0,1fr);gap:3px;align-items:start;}
-[data-dys-field] > textarea{grid-column:2;min-height:48px;}
-[data-dys-link]{appearance:none;background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer;
-  text-align:left;border-bottom:1px dashed var(--dys-line2);}
-[data-dys-link]:hover{color:var(--dys-blue);border-bottom-color:var(--dys-blue);}
-`
+    /* CSS-GENERATED: 改样式请编辑 assets/panel.css，再跑 node tools/build-client.mjs */
+    const CSS = "[data-dys]{--dys-fs:13px;--dys-r:12px;--dys-ink:currentColor;--dys-line:color-mix(in oklab,currentColor 13%,transparent);--dys-line2:color-mix(in oklab,currentColor 20%,transparent);--dys-fill:color-mix(in oklab,currentColor 4%,transparent);--dys-fill2:color-mix(in oklab,currentColor 7.5%,transparent);--dys-lead:color-mix(in oklab,currentColor 9.5%,transparent);--dys-raise:color-mix(in oklab,currentColor 14%,transparent);--dys-dim:.58;--dys-blue:#6f9ff0;--dys-on-accent:#0c1017;--dys-teal:#5fc3a4;--dys-violet:#a893e6;--dys-amber:#dbae6b;--dys-ok:#5fbf82;--dys-bad:#ef8175;box-sizing:border-box;width:100%;max-width:1220px;padding:2px 2px 12px;display:flex;flex-direction:column;gap:14px;font-size:var(--dys-fs);line-height:1.55;color:var(--dys-ink);font-variant-numeric:tabular-nums;}[data-dys] *{box-sizing:border-box;}[data-dys][data-theme=\"light\"]{--dys-dim:.62;--dys-fill:#ffffff;--dys-fill2:#f1f2f4;--dys-lead:#ffffff;--dys-raise:#ffffff;--dys-blue:#2f6fd0;--dys-on-accent:#ffffff;--dys-teal:#0f7a5c;--dys-violet:#5a45b0;--dys-amber:#9a6410;--dys-ok:#1c7d46;--dys-bad:#b83a24;}[data-dys-grid]{display:grid;grid-template-columns:minmax(0,1.06fr) minmax(0,.94fr);gap:14px;align-items:start;}[data-dys-grid][data-cols=\"1\"]{grid-template-columns:minmax(0,1fr);}[data-dys-col]{display:flex;flex-direction:column;gap:14px;min-width:0;}[data-dys-card]{position:relative;display:flex;flex-direction:column;gap:12px;min-width:0;padding:15px 17px 16px;border-radius:var(--dys-r);border:1px solid var(--dys-line);background:var(--dys-fill);}[data-dys-card][data-lead]{background:var(--dys-lead);border-color:var(--dys-line2);}[data-dys-card][data-kind=\"form\"]{padding:16px 18px 17px;gap:14px;}[data-dys-card][data-kind=\"metric\"]{padding:18px 18px 16px;gap:14px;}[data-dys-seg]{display:flex;gap:3px;flex-wrap:wrap;width:fit-content;max-width:100%;padding:3px;border-radius:12px;background:var(--dys-fill2);border:1px solid var(--dys-line);}[data-dys-seg][data-dys-seg2]{margin-top:-6px;background:transparent;border:0;padding:0 3px;}[data-dys-seg]>button{flex:0 0 auto;appearance:none;cursor:pointer;font:inherit;font-size:12px;line-height:1.5;padding:5px 12px;border:0;border-radius:9px;background:transparent;color:var(--dys-dim);white-space:nowrap;transition:color .12s ease,background .12s ease,box-shadow .12s ease;}[data-dys-seg]>button:hover{color:var(--dys-ink);background:color-mix(in oklab,var(--dys-ink) 5%,transparent);}[data-dys-seg]>button[data-on]{background:var(--dys-fill);color:var(--dys-ink);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.16),inset 0 0 0 1px var(--dys-line2);}[data-dys-seg] i{font-style:normal;font-size:10px;line-height:1;padding:2px 4px;margin-left:5px;border-radius:6px;background:color-mix(in oklab,var(--dys-blue) 15%,transparent);color:color-mix(in oklab,var(--dys-blue) 88%,currentColor);}[data-dys-view]{height:clamp(320px,46vh,480px);overflow:auto;border-radius:12px;display:grid;grid-template-columns:repeat(var(--dys-cols,1),minmax(0,1fr));align-content:start;gap:16px;scrollbar-width:thin;scrollbar-color:color-mix(in oklab,currentColor 22%,transparent) transparent;}[data-dys-view]>[data-dys-card][data-lead]{grid-column:1 / -1;}[data-dys-view]>*:only-child{min-height:100%;grid-column:1 / -1;align-self:start;}[data-dys-view][data-more]{-webkit-mask-image:linear-gradient(to bottom,#000 0,#000 calc(100% - 22px),transparent 100%);mask-image:linear-gradient(to bottom,#000 0,#000 calc(100% - 22px),transparent 100%);}[data-dys-view]::-webkit-scrollbar{width:8px;}[data-dys-view]::-webkit-scrollbar-thumb{border-radius:999px;background:color-mix(in oklab,currentColor 16%,transparent);}[data-dys-view]::-webkit-scrollbar-thumb:hover{background:color-mix(in oklab,currentColor 26%,transparent);}[data-dys-view]::-webkit-scrollbar-track{background:transparent;}[data-dys-own]{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;background:var(--dys-fill2);border:1px solid var(--dys-line);}[data-dys-own][data-level=\"green\"]{border-color:color-mix(in oklab,var(--dys-ok) 50%,var(--dys-line));background:color-mix(in oklab,var(--dys-ok) 9%,var(--dys-fill2));}[data-dys-own][data-level=\"red\"]{border-color:color-mix(in oklab,var(--dys-bad) 50%,var(--dys-line));background:color-mix(in oklab,var(--dys-bad) 9%,var(--dys-fill2));}[data-dys-dot]{flex:0 0 9px;width:9px;height:9px;border-radius:50%;background:var(--dys-dim);}[data-dys-own][data-level=\"green\"] [data-dys-dot]{background:var(--dys-ok);box-shadow:0 0 0 3px color-mix(in oklab,var(--dys-ok) 22%,transparent);}[data-dys-own][data-level=\"red\"] [data-dys-dot]{background:var(--dys-bad);box-shadow:0 0 0 3px color-mix(in oklab,var(--dys-bad) 22%,transparent);}[data-dys-own]>div{flex:1 1 auto;min-width:0;}[data-dys-own] b{font-size:12px;font-weight:620;}[data-dys-own] span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}[data-dys-tabs]{display:flex;gap:2px;padding:2px;border-radius:10px;background:var(--dys-fill2);}[data-dys-tab]{flex:1 1 0;appearance:none;cursor:pointer;font:inherit;font-size:11.5px;line-height:1.5;padding:4px 6px;border:0;border-radius:8px;background:transparent;color:var(--dys-dim);display:flex;align-items:center;justify-content:center;gap:4px;}[data-dys-tab]:hover{color:var(--dys-ink);}[data-dys-tab][data-on]{background:var(--dys-fill);color:var(--dys-ink);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.14);}[data-dys-tab]>i{font-style:normal;font-size:10px;opacity:.5;}[data-dys-head]{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;min-width:0;}[data-dys-title]{display:flex;align-items:center;gap:7px;flex:0 0 auto;white-space:nowrap;font-size:12.5px;font-weight:600;color:color-mix(in oklab,currentColor 86%,transparent);}[data-dys-card][data-lead] [data-dys-title]{font-size:13.5px;font-weight:650;color:var(--dys-ink);}[data-dys-sub]{font-size:11.5px;color:var(--dys-dim);font-weight:400;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}[data-dys-grow]{flex:1 1 0;min-width:0;}[data-dys-tools]{margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;min-width:0;max-width:100%;}[data-dys-ico]{width:22px;height:22px;border-radius:7px;flex:0 0 auto;display:grid;place-items:center;background:var(--dys-fill2);color:color-mix(in oklab,currentColor 62%,transparent);}[data-dys-card][data-lead] [data-dys-ico]{background:color-mix(in oklab,var(--dys-blue) 26%,transparent);color:var(--dys-blue);}[data-dys-svg]{display:block;flex:0 0 auto;}[data-dys-dim]{color:var(--dys-dim);}[data-dys-sm]{font-size:11.5px;}[data-dys-xs]{font-size:11px;}[data-dys-hero]{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:14px;align-items:center;padding:15px 17px;border-radius:var(--dys-r);border:1px solid var(--dys-line);background:radial-gradient(120% 150% at 10% 0%,color-mix(in oklab,var(--dys-blue) 14%,transparent),transparent 60%),var(--dys-fill);}[data-dys-ava]{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-size:16px;font-weight:650;background:color-mix(in oklab,var(--dys-blue) 22%,transparent);color:var(--dys-blue);}[data-dys-name]{font-size:15px;font-weight:650;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}[data-dys-pills]{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:5px;}[data-dys-stats]{display:flex;gap:18px;align-items:center;}[data-dys-stat]{display:flex;flex-direction:column;align-items:flex-end;gap:1px;min-width:52px;}[data-dys-stat] b{display:block;font-size:15px;font-weight:600;line-height:1.3;}[data-dys-stat] span{font-size:11px;color:var(--dys-dim);}[data-dys-herobar]{grid-column:1 / -1;display:flex;align-items:center;gap:10px;margin-top:-2px;padding-top:10px;border-top:1px solid var(--dys-line);}[data-dys-herobar]>span{font-size:10.5px;letter-spacing:.06em;color:var(--dys-dim);white-space:nowrap;}[data-dys-herobar]>i{flex:1 1 0;height:4px;border-radius:999px;background:var(--dys-fill2);overflow:hidden;}[data-dys-herobar]>i>b{display:block;height:100%;border-radius:999px;transition:width .3s ease;}[data-dys][data-cols=\"1\"] [data-dys-hero]{grid-template-columns:auto minmax(0,1fr);row-gap:12px;}[data-dys][data-cols=\"1\"] [data-dys-stats]{grid-column:1 / -1;flex-wrap:wrap;gap:14px 20px;}[data-dys][data-cols=\"1\"] [data-dys-stat]{align-items:flex-start;}[data-dys-pill]{display:inline-flex;align-items:center;gap:5px;font-size:11px;line-height:1.7;color:color-mix(in oklab,currentColor 74%,transparent);white-space:nowrap;}[data-dys-pill]>i{width:6px;height:6px;border-radius:999px;flex:0 0 auto;background:color-mix(in oklab,currentColor 26%,transparent);}[data-dys-pill][data-tone=\"ok\"]>i{background:var(--dys-ok);}[data-dys-pill][data-tone=\"warn\"]>i{background:var(--dys-amber);}[data-dys-pill][data-tone=\"bad\"]>i{background:var(--dys-bad);}[data-dys-pill][data-tone=\"accent\"]>i{background:var(--dys-blue);}[data-dys-pill][data-strong]{color:var(--dys-ink);}[data-dys-tag]{display:inline-flex;align-items:center;padding:0 6px;border-radius:6px;font-size:10.5px;line-height:1.75;background:var(--dys-fill2);color:color-mix(in oklab,currentColor 66%,transparent);white-space:nowrap;}[data-dys-btn]{appearance:none;cursor:pointer;font:inherit;font-size:12px;line-height:1.5;padding:4px 11px;border-radius:9px;border:1px solid var(--dys-line2);background:transparent;color:var(--dys-ink);white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;gap:5px;transition:background .12s ease,border-color .12s ease,transform .08s ease;}[data-dys-btn]:hover{background:var(--dys-fill2);}[data-dys-btn]:active{transform:translateY(.5px);}[data-dys-btn][data-primary]{border-color:transparent;background:var(--dys-blue);color:var(--dys-on-accent);font-weight:600;}[data-dys-btn][data-primary]:hover{background:color-mix(in oklab,var(--dys-blue) 86%,#000);}[data-dys-btn][data-armed]{border-color:var(--dys-bad);background:color-mix(in oklab,var(--dys-bad) 16%,transparent);color:var(--dys-bad);font-weight:600;}[data-dys-btn][data-ghost]{border-color:transparent;color:var(--dys-dim);padding:3px 7px;}[data-dys-pick]{display:grid;grid-template-columns:56px minmax(0,1fr) auto;gap:6px 10px;align-items:start;padding:9px 0;border-bottom:1px solid var(--dys-line);}[data-dys-pick]:last-child{border-bottom:0;}[data-dys-pick][data-nocover]{grid-template-columns:minmax(0,1fr) auto;padding-left:66px;}[data-dys-thumb]{width:56px;height:56px;border-radius:8px;object-fit:cover;display:block;background:var(--dys-fill2);grid-row:1 / span 2;}[data-dys-pickt]{font-size:12.5px;line-height:1.45;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}[data-dys-pickm]{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;}[data-dys-pickacts]{display:flex;align-items:center;gap:8px;flex:0 0 auto;}[data-dys-pickacts] [data-dys-btn][data-ghost]{font-size:14px;line-height:1;padding:4px 8px;color:color-mix(in oklab,currentColor 70%,transparent);}[data-dys-btn][data-ghost]:hover{color:var(--dys-ink);background:var(--dys-fill2);}[data-dys-btn:disabled]{opacity:.4;cursor:default;}[data-dys-row]{display:flex;gap:7px;align-items:center;flex-wrap:wrap;}[data-dys-bar]{position:relative;height:4px;border-radius:999px;background:var(--dys-fill2);overflow:hidden;flex:1 1 auto;}[data-dys-bar]>i{position:absolute;inset:0 auto 0 0;border-radius:999px;background:var(--dys-ac,var(--dys-blue));}[data-dys-budgetrow]{display:grid;grid-template-columns:64px minmax(0,1fr) 62px;gap:10px;align-items:center;}[data-dys-budgetrow][data-full]>b{color:var(--dys-bad);}[data-dys-budgetrow]>b{font-weight:550;font-size:12px;text-align:right;}[data-dys-tabs]{display:flex;gap:2px;padding:2px;border-radius:10px;background:var(--dys-fill2);}[data-dys-tab]{flex:1 1 0;appearance:none;cursor:pointer;font:inherit;font-size:12px;padding:4px 6px;border-radius:8px;border:0;background:transparent;color:var(--dys-dim);white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;gap:5px;min-width:0;}[data-dys-tab]>span{overflow:hidden;text-overflow:ellipsis;}[data-dys-tab][data-on]{background:var(--dys-raise);color:var(--dys-ink);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.14);}[data-dys-tab]>i{font-style:normal;margin-left:5px;font-size:11px;opacity:.75;}[data-dys-auto]{display:flex;flex-direction:column;min-width:0;}[data-dys-autoblock]{border-bottom:1px solid var(--dys-line);padding:3px 0;}[data-dys-autoblock]:last-child{border-bottom:0;}[data-dys-autorow]{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:9px;align-items:center;padding:5px 0;}[data-dys-knobs]{display:flex;flex-wrap:wrap;gap:8px 18px;padding:2px 0 10px 31px;}[data-dys-knob]{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--dys-dim);min-width:0;}[data-dys-knob]>span{white-space:nowrap;}[data-dys-knob] [data-dys-in]{width:108px;}[data-dys-knob] select[data-dys-in]{width:auto;min-width:108px;}[data-dys-ico][data-accent]{background:color-mix(in oklab,var(--dys-blue) 24%,transparent);color:var(--dys-blue);}[data-dys-switch]{appearance:none;cursor:pointer;padding:0;position:relative;flex:0 0 auto;width:34px;height:19px;border-radius:999px;border:1px solid var(--dys-line2);background:var(--dys-fill2);transition:background .15s ease,border-color .15s ease;}[data-dys-switch]>i{position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:999px;background:color-mix(in oklab,currentColor 45%,transparent);transition:left .15s ease,background .15s ease;}[data-dys-switch][data-on]{background:var(--dys-blue);border-color:transparent;}[data-dys-switch][data-on]>i{left:17px;background:var(--dys-on-accent);}[data-dys-ibx]{display:flex;flex-direction:column;gap:2px;min-height:60px;}[data-dys-item]{display:grid;grid-template-columns:6px minmax(0,1fr);gap:9px;padding:8px 8px 8px 0;border-radius:10px;cursor:pointer;border:1px solid transparent;}[data-dys-item]:hover{background:var(--dys-fill2);}[data-dys-item][data-open]{background:var(--dys-fill2);border-color:var(--dys-line);}[data-dys-mark]{width:6px;height:6px;align-self:start;margin-top:6px;border-radius:999px;background:color-mix(in oklab,currentColor 18%,transparent);}[data-dys-item][data-worth=\"1\"] [data-dys-mark]{background:color-mix(in oklab,var(--dys-blue) 55%,transparent);}[data-dys-item][data-worth=\"2\"] [data-dys-mark]{background:var(--dys-blue);}[data-dys-itemtop]{display:flex;align-items:baseline;gap:7px;min-width:0;}[data-dys-itemtop]>b{font-weight:600;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:56%;}[data-dys-itemtop]>time{margin-left:auto;font-size:11px;color:var(--dys-dim);font-style:normal;flex:0 0 auto;}[data-dys-prev]{font-size:12px;color:color-mix(in oklab,currentColor 82%,transparent);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}[data-dys-why]{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px;}[data-dys-body]{display:flex;flex-direction:column;gap:9px;padding:4px 2px 6px 0;}[data-dys-hist]{display:flex;flex-direction:column;gap:3px;max-height:150px;overflow:auto;padding:7px 9px;border-radius:9px;background:var(--dys-fill2);}[data-dys-line]{display:flex;gap:7px;font-size:11.5px;}[data-dys-line]>span:first-child{flex:0 0 30px;color:var(--dys-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}[data-dys-ta]{width:100%;resize:vertical;min-height:56px;font:inherit;font-size:12.5px;line-height:1.5;padding:7px 9px;border-radius:9px;border:1px solid var(--dys-line2);background:color-mix(in oklab,currentColor 6%,transparent);color:var(--dys-ink);}[data-dys-ta]:focus{outline:none;border-color:color-mix(in oklab,var(--dys-blue) 62%,transparent);box-shadow:0 0 0 3px color-mix(in oklab,var(--dys-blue) 16%,transparent);}[data-dys-said]{padding:7px 9px;border-radius:9px;font-size:11.5px;color:var(--dys-ok);background:color-mix(in oklab,var(--dys-ok) 10%,transparent);}[data-dys-field][data-wide]{grid-column:1 / -1;}[data-dys-in][type=\"number\"]{appearance:auto;-moz-appearance:auto;padding-right:2px;}[data-dys-check]{display:inline-flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;min-width:0;}[data-dys-check]>input{width:14px;height:14px;accent-color:var(--dys-blue);cursor:pointer;flex:0 0 auto;margin:0;}[data-dys-check]>span{color:color-mix(in oklab,currentColor 78%,transparent);}input[data-dys-in],select[data-dys-in]{appearance:none;font:inherit;font-size:12px;line-height:1.5;padding:3px 8px;border-radius:8px;border:1px solid var(--dys-line2);background:color-mix(in oklab,currentColor 6%,transparent);color:inherit;min-width:0;}input[data-dys-in]:focus,select[data-dys-in]:focus{outline:none;border-color:color-mix(in oklab,var(--dys-blue) 62%,transparent);box-shadow:0 0 0 3px color-mix(in oklab,var(--dys-blue) 16%,transparent);}input[data-dys-in]::placeholder{color:var(--dys-dim);}[data-dys-list]{display:flex;flex-direction:column;gap:1px;}[data-dys-li]{display:grid;grid-template-columns:6px minmax(0,1fr) auto;gap:9px;align-items:baseline;padding:5.5px 3px;font-size:12px;}[data-dys-li] + [data-dys-li]{border-top:1px solid var(--dys-line);}[data-dys-dot]{width:6px;height:6px;border-radius:999px;align-self:center;background:color-mix(in oklab,currentColor 22%,transparent);}[data-dys-dot][data-ok]{background:var(--dys-ok);}[data-dys-dot][data-bad]{background:var(--dys-bad);}[data-dys-dot][data-warn]{background:var(--dys-amber);}[data-dys-dot][data-accent]{background:var(--dys-blue);}[data-dys-li]>time{font-size:11px;color:var(--dys-dim);font-style:normal;}[data-dys-ell]{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}[data-dys-li-main]{display:flex;gap:5px;align-items:baseline;min-width:0;}[data-dys-trend]{display:flex;align-items:flex-end;gap:12px;}[data-dys-trend] svg{flex:1 1 auto;height:44px;overflow:visible;}[data-dys-empty]{padding:12px 2px 4px;font-size:12px;color:var(--dys-dim);text-align:center;}[data-dys-empty]>div + div{margin-top:9px;}[data-dys-err]{font-size:11.5px;color:var(--dys-bad);}[data-dys-note]{font-size:11.5px;color:var(--dys-dim);}[data-dys-pre]{max-height:220px;overflow:auto;font-size:11px;line-height:1.45;padding:8px 10px;border-radius:9px;background:var(--dys-fill2);margin:0;white-space:pre-wrap;word-break:break-word;}[data-dys-skel]{height:44px;border-radius:9px;background:linear-gradient(90deg,var(--dys-fill2),var(--dys-fill),var(--dys-fill2));background-size:200% 100%;animation:dys-skel 1.3s ease-in-out infinite;}@keyframes dys-skel{0%{background-position:0 0}100%{background-position:-200% 0}}@media (prefers-reduced-motion:reduce){[data-dys-skel]{animation:none;}}[data-dys-diag]{border:1px solid var(--dys-line);border-radius:12px;padding:9px 13px;font-size:11.5px;color:var(--dys-dim);}[data-dys-diag]>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:7px;}[data-dys-diag]>summary::-webkit-details-marker{display:none;}[data-dys-diag]>summary::before{content:'▸';font-size:10px;display:inline-block;transition:transform .12s ease;}[data-dys-diag][open]>summary::before{transform:rotate(90deg);}[data-dys-diag]>summary:hover{color:var(--dys-ink);}[data-dys-diagbody]{display:flex;flex-direction:column;gap:6px;margin-top:9px;padding-top:9px;border-top:1px solid var(--dys-line);}[data-dys-kv]{display:grid;grid-template-columns:88px minmax(0,1fr);gap:8px;font-size:11.5px;}[data-dys-kv]>span:first-child{color:var(--dys-dim);}[data-dys-kv]>span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}[data-dys-field]{display:grid;grid-template-columns:92px minmax(0,1fr);gap:8px;align-items:center;}[data-dys-formgrid]{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 10px;}[data-dys-formgrid] [data-dys-field]{grid-template-columns:74px minmax(0,1fr);}[data-dys][data-cols=\"1\"] [data-dys-formgrid]{grid-template-columns:repeat(2,minmax(0,1fr));}[data-dys-flabel]{font-size:11.5px;color:var(--dys-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}[data-dys-group]{grid-column:1 / -1;margin:4px 0 -2px;padding-top:6px;border-top:1px dashed var(--dys-line);font-size:11px;font-weight:650;letter-spacing:.04em;color:var(--dys-dim);}[data-dys-col]>[data-dys-group]:first-child,[data-dys-formgrid]>[data-dys-group]:first-child{margin-top:0;padding-top:0;border-top:0;}[data-dys-formgrid]{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:7px 16px;align-items:start;}[data-dys-formgrid] [data-dys-field]{grid-template-columns:minmax(0,1fr);gap:3px;align-items:start;}[data-dys-field]>textarea{grid-column:2;min-height:48px;}[data-dys-link]{appearance:none;background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer;text-align:left;border-bottom:1px dashed var(--dys-line2);}[data-dys-link]:hover{color:var(--dys-blue);border-bottom-color:var(--dys-blue);}[data-dys-stat] b{font-size:22px;font-weight:660;line-height:1.15;letter-spacing:-.02em;font-variant-numeric:tabular-nums;}[data-dys-stat][data-click]{cursor:pointer;border-radius:9px;padding:2px 7px;margin:-2px -7px;transition:background .12s ease;}[data-dys-stat][data-click]:hover{background:var(--dys-fill2);}[data-dys-stat][data-click]:focus-visible{outline:2px solid var(--dys-blue);outline-offset:2px;}[data-dys-next]{grid-column:1 / -1;display:flex;align-items:center;gap:9px;min-width:0;padding-top:8px;margin-top:-2px;border-top:1px dashed var(--dys-line);font-size:11.5px;}[data-dys-nextdot]{flex:0 0 7px;width:7px;height:7px;border-radius:50%;background:var(--dys-ok);}[data-dys-nextdot][data-level=\"warn\"]{background:var(--dys-amber);}[data-dys-nextdot][data-level=\"stop\"]{background:var(--dys-bad);}[data-dys-nexttxt]{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}[data-dys-ibx]{gap:0;}[data-dys-thead],[data-dys-tr]{display:grid;grid-template-columns:6px minmax(70px,1fr) minmax(0,2.2fr) minmax(0,1fr) 68px;gap:9px;align-items:center;}[data-dys-thead]{padding:2px 4px 6px;font-size:10.5px;letter-spacing:.04em;color:var(--dys-dim);border-bottom:1px solid var(--dys-line2);}[data-dys-thead]>span:last-child{text-align:right;}[data-dys-tr]{min-height:30px;padding:5px 4px;border-bottom:1px solid var(--dys-line);cursor:pointer;font-size:12px;}[data-dys-tr]:hover{background:var(--dys-fill2);}[data-dys-tr][data-open]{background:var(--dys-fill2);box-shadow:inset 2px 0 0 var(--dys-blue);}[data-dys-cell]{min-width:0;}[data-dys-tr]>b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;font-size:12px;}[data-dys-tr] [data-dys-prev]{-webkit-line-clamp:1;line-clamp:1;margin:0;}[data-dys-tr] [data-dys-why]{margin:0;overflow:hidden;white-space:nowrap;}[data-dys-tr]>time{font-size:11px;color:var(--dys-dim);text-align:right;white-space:nowrap;}[data-dys-tr][data-worth=\"2\"] [data-dys-mark]{background:var(--dys-blue);}[data-dys-log]{display:flex;flex-direction:column;max-height:210px;overflow:auto;}[data-dys-logrow]{display:flex;align-items:center;gap:8px;min-width:0;padding:5px 2px;font-size:11.5px;border-bottom:1px solid var(--dys-line);}[data-dys-logrow]:last-child{border-bottom:0;}[data-dys-logrow]>b{flex:0 0 56px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}[data-dys-logrow]>[data-dys-ell]{max-width:38%;}[data-dys-logtime]{flex:0 0 62px;color:var(--dys-dim);white-space:nowrap;}[data-dys-logrow] [data-dys-dot]{flex:0 0 6px;width:6px;height:6px;margin:0;}[data-dys-sep]{grid-column:1 / -1;display:flex;align-items:center;gap:8px;margin:6px 0 1px;padding:6px 9px;border-radius:9px;background:var(--dys-fill2);border:1px solid var(--dys-line);font-size:11px;font-weight:650;color:color-mix(in oklab,currentColor 78%,transparent);}[data-dys-sep]::before{content:'';width:3px;height:12px;border-radius:2px;background:var(--dys-blue);}[data-dys-pal]{position:fixed;inset:0;z-index:9999;display:grid;place-items:start center;padding-top:14vh;background:color-mix(in oklab,#000 42%,transparent);}[data-dys-palbox]{width:min(420px,92vw);display:flex;flex-direction:column;gap:2px;padding:10px;border-radius:14px;border:1px solid var(--dys-line2);background:var(--dys-raise);box-shadow:0 18px 50px rgba(0,0,0,.34);}[data-dys-paltitle]{padding:5px 9px 9px;font-size:11px;color:var(--dys-dim);}[data-dys-palitem]{appearance:none;border:0;background:transparent;color:var(--dys-ink);font:inherit;font-size:12.5px;text-align:left;padding:8px 10px;border-radius:9px;cursor:pointer;}[data-dys-palitem]:hover{background:var(--dys-fill2);}@media (max-width:720px){[data-dys-seg]{flex-wrap:nowrap;overflow-x:auto;max-width:100%;-webkit-mask-image:linear-gradient(90deg,#000 0,#000 92%,transparent 100%);mask-image:linear-gradient(90deg,#000 0,#000 92%,transparent 100%);}[data-dys-seg]>button{padding:5px 10px;}[data-dys-hero]{gap:10px;padding:12px 13px;}[data-dys-stats]{gap:12px;flex-wrap:wrap;}[data-dys-stat] b{font-size:20px;}[data-dys-thead],[data-dys-tr]{grid-template-columns:6px minmax(60px,.9fr) minmax(0,2fr) 62px;}[data-dys-thead]>span:nth-child(4),[data-dys-tr]>[data-dys-why]{display:none;}[data-dys-next]{flex-wrap:wrap;gap:6px;}[data-dys-logrow]>[data-dys-ell]{max-width:30%;}[data-dys-view]{height:clamp(300px,52vh,460px);}}[data-dys-funnel]{display:flex;flex-direction:column;gap:4px;padding:2px 0 6px;}[data-dys-fstep]{display:grid;grid-template-columns:78px minmax(0,1fr);gap:9px;align-items:center;font-size:11px;color:var(--dys-dim);}[data-dys-fstep]>i{height:6px;border-radius:999px;background:var(--dys-fill2);overflow:hidden;}[data-dys-fstep]>i>b{display:block;height:100%;border-radius:999px;background:var(--dys-blue);}[data-dys-fstep][data-i=\"1\"]>i>b{background:var(--dys-amber);}[data-dys-fstep][data-i=\"2\"]>i>b{background:var(--dys-ok);}"
+    /* CSS-GENERATED-END */
 
     /* ── 数据 ─────────────────────────────────────────────────────────── */
     const TIMEOUT_MS = 260000
@@ -433,7 +81,7 @@ input[data-dys-in]::placeholder{color:var(--dys-dim);}
       if (hr < 24) return hr + ' 小时前'
       return Math.round(hr / 24) + ' 天前'
     }
-    const Time = ({ at }) => (at ? h('time', { title: hhmm(at) }, ago(at) || hhmm(at)) : h('time', null, '—'))
+    const Time = ({ at, when }) => (at ? h('time', { title: hhmm(at) }, when || ago(at) || hhmm(at)) : h('time', null, '—'))
     const num = (x) => (typeof x === 'number' && Number.isFinite(x) ? x : 0)
     const short = (s, n) => {
       const t = String(s == null ? '' : s).replace(/\s+/g, ' ').trim()
@@ -679,12 +327,15 @@ input[data-dys-in]::placeholder{color:var(--dys-dim);}
       /* 顺序 = 两列网格的行顺序：**相邻两个必须是一对**。
        * 上一版把「静音从 / 静音到」拆到了两行，「静音到 / 谷时从」并排 ——
        * 看着像四个不相干的输入框，这就是那页"怪"的原因。 */
+      { sep: '静音时段' },
       { k: 'quietFrom', label: '静音从', ph: 'HH:MM' },
       { k: 'quietTo', label: '静音到', ph: 'HH:MM' },
       /* 低峰可以配两段。它只决定「主动发布 / 自动刷视频」什么时候跑；
        * 回消息在 09:00–23:00 都照常（除非把下面的「高峰期也回消息」关掉）。 */
+      { sep: '低峰一' },
       { k: 'activeFrom', label: '低峰一 · 从', ph: '00:30' },
       { k: 'activeTo', label: '低峰一 · 到', ph: '08:30' },
+      { sep: '低峰二' },
       { k: 'active2From', label: '低峰二 · 从', ph: '留空 = 不设' },
       { k: 'active2To', label: '低峰二 · 到', ph: '留空 = 不设' },
       /* 两个出口分开数：私信分享几条、评论区 @ 几条。0 = 那条路不走。 */
@@ -784,7 +435,9 @@ input[data-dys-in]::placeholder{color:var(--dys-dim);}
         v
           ? h('div', { 'data-dys-formgrid': '' },
             (SETTING_GROUPS.find((g) => g.name === grp) || SETTING_GROUPS[0] || { fields: [] }).fields
-              .map((f) => h(Field, { key: f.k, f, v: v[f.k], onChange: set, onCommit: saveField })))
+              .map((f) => f.sep
+                ? h('div', { key: 'sep-' + f.sep, 'data-dys-sep': '' }, f.sep)
+                : h(Field, { key: f.k, f, v: v[f.k], onChange: set, onCommit: saveField })))
           : null,
         err ? h(ErrLine, { text: err }) : null,
         h('div', { 'data-dys-note': '' },
@@ -1012,18 +665,26 @@ input[data-dys-in]::placeholder{color:var(--dys-dim);}
           : null)
     }
 
-    /* ── 头部 ── */
-    const stat = (v, label) => h('div', { 'data-dys-stat': '' },
+    /* ── 头部：三个数回答「现在要不要动手」，不是粉丝/作品/获赞 ── */
+    const stat = (v, label, onClick) => h('div', {
+      'data-dys-stat': '', 'data-click': onClick ? '' : undefined,
+      role: onClick ? 'button' : undefined, tabIndex: onClick ? 0 : undefined,
+      title: onClick ? '点一下跳到那一区' : undefined,
+      onClick, onKeyDown: onClick ? (e) => { if (e.key === 'Enter') onClick() } : undefined,
+    },
       h('b', null, v == null || v === '' ? '—' : v),
       h('span', null, label))
 
-    const Head = ({ status, budget, watch, onRefresh, refreshing }) => {
+    const Head = ({ status, budget, watch, kill, onRefresh, refreshing, schedule, onJump, onPause, onKill }) => {
       const u = (status && status.self && status.self.user) || {}
       const b = budget || {}
       const msgs = b.messages || {}
       const q = (status && status.quota) || {}
       const nick = u.nickname || '（读不到账号）'
       const watchOn = !!(watch && watch.running)
+      /* 停损状态由服务端读 KILL 文件给出：面板不缓存、不猜，避免"按钮显示关着、其实还在发"。 */
+      const killed = !!(kill && kill.killed)
+      const killWhy = (kill && kill.info && kill.info.reason) || ''
       const logged = !!(status && status.ok)
       /* 看板只留一个主数字：今天还能发几条。旁边一条细进度条，
        * 扫一眼就知道离限流还有多远，不用去读小字。 */
@@ -1031,6 +692,13 @@ input[data-dys-in]::placeholder{color:var(--dys-dim);}
       const capMsgs = num(msgs.max)
       const pct = capMsgs > 0 ? Math.min(100, Math.round(usedMsgs / capMsgs * 100)) : 0
       const tone = pct >= 90 ? 'var(--dys-bad)' : pct >= 70 ? 'var(--dys-amber)' : 'var(--dys-blue)'
+      /* 看板数字由服务端的 heroView 算好：拿不到就是 null → 画「—」，绝不画成 0。 */
+      const hero = (schedule && schedule.hero) || {}
+      const next = (schedule && schedule.next) || {}
+      const sum = (schedule && schedule.summary) || {}
+      const health = (schedule && schedule.health) || {}
+      const jump = (v) => (onJump ? () => onJump(v) : undefined)
+      const lastTxt = hero.lastReply ? (hero.lastReply.ok ? '成功' : '失败') : null
       return h('div', { 'data-dys-hero': '' },
         h('div', { 'data-dys-ava': '' },
           (logged && u.nickname) ? String(u.nickname).slice(0, 1) : Ico({ name: 'bot', size: 19 })),
@@ -1045,16 +713,37 @@ input[data-dys-in]::placeholder{color:var(--dys-dim);}
             }),
             q.today != null
               ? Pill({ children: '回评 ' + num(q.today) + '/' + (num(q.todayLeft) + num(q.today) || '—') })
-              : null)),
+              : null,
+            health.level && health.level !== 'ok'
+              ? Pill({ tone: health.level === 'stop' ? 'bad' : 'warn', children: '连败 ' + (health.failures || 0) + ' 次' })
+              : null,
+            killed ? Pill({ tone: 'bad', strong: true, children: killWhy ? '已停损 · ' + short(killWhy, 12) : '已停损' }) : null)),
         h('div', { 'data-dys-stats': '' },
-          stat(u.follower, '粉丝'),
-          stat(u.aweme_count, '作品'),
-          stat(u.total_favorited, '获赞'),
+          stat(hero.pending, '待回', jump('reply')),
+          stat(hero.quotaLeft, '额度剩', jump('today')),
+          stat(lastTxt, '上一条回评', jump('reply')),
+          h(Btn, {
+            label: killed ? '解除停损' : '停损',
+            icon: killed ? 'pulse' : 'alert',
+            ghost: !killed,
+            title: killed ? '确认安全后再解除：解除后所有写操作立刻恢复' : '一键停掉所有会发出去的动作（回评/私信/@/发布/删除）',
+            onClick: () => onKill && onKill(!killed),
+          }),
           h(Btn, { label: '刷新', icon: 'refresh', ghost: true, busy: refreshing, busyLabel: '读…', onClick: onRefresh })),
         h('div', { 'data-dys-herobar': '' },
           h('span', null, '今日消息'),
           h('i', null, h('b', { style: { width: pct + '%', background: tone, boxShadow: '0 0 12px -2px ' + tone } })),
-          h('span', null, usedMsgs + ' / ' + (capMsgs || '—'))))
+          h('span', null, usedMsgs + ' / ' + (capMsgs || '—'))),
+        h('div', { 'data-dys-next': '' },
+          h('i', { 'data-dys-nextdot': '', 'data-level': health.level || 'ok' }),
+          h('span', { 'data-dys-nexttxt': '' }, next.label || next.reason || '今天没有安排下一轮'),
+          h('span', { 'data-dys-dim': '', 'data-dys-xs': '' },
+            '今天 ' + (sum.ran || 0) + ' 轮 · 跳过 ' + (sum.skipped || 0)),
+          h('span', { 'data-dys-grow': '' }),
+          schedule && schedule.ok
+            ? h(Btn, { label: schedule.paused ? '继续刷' : '暂停刷', ghost: true,
+                onClick: () => onPause && onPause(!schedule.paused) })
+            : null))
     }
 
     /* ── 额度 ── */
@@ -1115,25 +804,21 @@ input[data-dys-in]::placeholder{color:var(--dys-dim);}
     const whyText = (it) => (it.why || []).slice(0, 2)
     const blockText = (it) => (it.blocked || []).slice(0, 1)
 
+    /* 表格式一行：类型/谁/说了什么/判定/时间 列对齐，一屏能扫 10+ 条。
+     * 展开回复仍跨整行，不破坏原来的 Composer。 */
     const Item = ({ kind, it, open, onOpen, children }) =>
       h('div', {
-        'data-dys-item': '', 'data-open': open ? '' : undefined, 'data-worth': String(worthLevel(it)),
+        'data-dys-tr': '', 'data-open': open ? '' : undefined, 'data-worth': String(worthLevel(it)),
         onClick: onOpen,
       },
         h('div', { 'data-dys-mark': '' }),
-        h('div', { 'data-dys-col': '', style: { gap: '3px', minWidth: 0 } },
-          h('div', { 'data-dys-itemtop': '' },
-            h('b', { title: itemTitle(kind, it) }, itemTitle(kind, it)),
-            kind === 'at' && it.aweme_desc
-              ? h('span', { 'data-dys-xs': '', 'data-dys-dim': '', 'data-dys-ell': '' }, ' · ' + short(it.aweme_desc, 26))
-              : null,
-            h(Time, { at: itemAt(kind, it) })),
-          h('div', { 'data-dys-prev': '' }, short(itemText(kind, it) || '（没有文字内容）', 120)),
-          (whyText(it).length || blockText(it).length)
-            ? h('div', { 'data-dys-why': '' },
-              whyText(it).map((w, i) => h(Tag, { key: 'w' + i }, w)),
-              blockText(it).map((w, i) => h(Tag, { key: 'b' + i }, w)))
-            : null),
+        h('b', { 'data-dys-cell': '', title: itemTitle(kind, it) }, itemTitle(kind, it)),
+        h('div', { 'data-dys-cell': '', 'data-dys-prev': '' },
+          it.view ? it.view.preview : short(itemText(kind, it) || '（没有文字内容）', 120)),
+        h('div', { 'data-dys-cell': '', 'data-dys-why': '' },
+          whyText(it).map((w, i) => h(Tag, { key: 'w' + i }, w)),
+          blockText(it).map((w, i) => h(Tag, { key: 'b' + i }, w))),
+        h(Time, { at: itemAt(kind, it), when: it.view ? it.view.when : '' }),
         open ? h('div', { style: { gridColumn: '1 / -1' } }, children) : null)
 
     const Composer = ({ kind, it, onDone }) => {
@@ -1205,7 +890,7 @@ input[data-dys-in]::placeholder{color:var(--dys-dim);}
             text.length + '/' + max)))
     }
 
-    const Inbox = ({ data, err, loading, onReload, onAfterSend, onForce, forcing }) => {
+    const Inbox = ({ data, err, loading, onReload, onAfterSend, onForce, forcing, onFeed }) => {
       const [tab, setTab] = useState('dm')
       const [open, setOpen] = useState('')
       const [all, setAll] = useState(false)
@@ -1248,6 +933,12 @@ input[data-dys-in]::placeholder{color:var(--dys-dim);}
             title: '忽略缓存，真去跑一轮（要十几秒）',
           })),
       },
+        /* 停损开着的时候，这张卡最重要的一句话不是"有几条值得回"，是"现在一条也发不出去"。
+         * 放在最上面，免得人一条条点进去、每条都被拒一次。 */
+        (data && data.kill && data.kill.on)
+          ? h('div', { 'data-dys-note': '', style: { color: 'var(--dys-bad)', fontWeight: 550 } },
+            '停损中：写操作全部被拒（' + String((data.kill.info && data.kill.info.reason) || '手动停损') + '）。到顶部按「解除停损」再回。')
+          : null,
         h('div', { 'data-dys-tabs': '' },
           TABS.map((t) => h('button', {
             key: t.k, 'data-dys-tab': '', 'data-on': tab === t.k ? '' : undefined,
@@ -1259,10 +950,15 @@ input[data-dys-in]::placeholder{color:var(--dys-dim);}
           : null,
         !loading && pack.ok === false ? h(ErrLine, { text: pack.error || '这一块读不到' }) : null,
         h('div', { 'data-dys-ibx': '' },
+          h('div', { 'data-dys-thead': '' },
+            h('span', null, ''), h('span', null, '谁'), h('span', null, '说了什么'),
+            h('span', null, '判定'), h('span', null, '时间')),
           items.length === 0 && !loading
             ? h(Empty, {
               text: emptyText,
-              action: h(Btn, { label: '再看一遍', ghost: true, onClick: onForce || onReload }),
+              action: h('div', { 'data-dys-row': '' },
+                h(Btn, { label: '再看一遍', ghost: true, onClick: onForce || onReload }),
+                onFeed ? h(Btn, { label: '去刷一轮', ghost: true, onClick: onFeed }) : null),
             })
             : items.map((it, i) => {
               /* key 必须稳定。原来兜底用 Math.random()：一旦某条缺了 uid/cid，
@@ -1284,6 +980,43 @@ input[data-dys-in]::placeholder{color:var(--dys-dim);}
           'data-dys-note': '',
           title: '判「该不该回」是本地规则：最后一句是我 → 等；系统通知 / 纯表情 / 超过 72 小时 → 不打扰。',
         }, '纯表情、系统通知、超过 72 小时的不打扰'))
+    }
+
+    /* ── 值班日志：既看「做了什么」，也看「为什么没做」 ─────────────────
+     * 8 个开关只能告诉人「它是开的」，审计要看每一次判定和跳过原因。 */
+    const DutyLog = ({ schedule, onRefresh }) => {
+      const s = schedule || {}
+      const items = (s.log && s.log.items) || []
+      const sum = s.summary || {}
+      const f = s.funnel || {}
+      const fmax = Math.max(f.seen || 0, f.worth || 0, f.sent || 0, 1)
+      return h('div', { 'data-dys-card': '', 'data-kind': 'metric' },
+        h('div', { 'data-dys-head': '' },
+          h('div', { 'data-dys-title': '' }, Ico({ name: 'pulse', size: 13 }), '值班日志'),
+          h('div', { 'data-dys-sub': '', 'data-dys-grow': '' },
+            '今天 ' + (sum.ran || 0) + ' 轮 · 跳过 ' + (sum.skipped || 0) + ' · 失败 ' + (sum.failed || 0)),
+          h('div', { 'data-dys-tools': '' }, h(Btn, { label: '刷新', ghost: true, onClick: onRefresh }))),
+        f.hasData
+          ? h('div', { 'data-dys-funnel': '' },
+            [['看到 ' + (f.seen || 0), f.seen || 0], ['判该回 ' + (f.worth || 0), f.worth || 0],
+              ['回了 ' + (f.sent || 0), f.sent || 0]].map(([txt, v], i) =>
+              h('div', { key: i, 'data-dys-fstep': '', 'data-i': String(i) },
+                h('span', null, txt),
+                h('i', null, h('b', { style: { width: Math.max(4, Math.round(v / fmax * 100)) + '%' } })))))
+          : null,
+        items.length
+          ? h('div', { 'data-dys-log': '' }, items.map((r, i) =>
+            h('div', { key: i, 'data-dys-logrow': '' },
+              h('span', { 'data-dys-logtime': '' }, r.when || '—'),
+              h('i', { 'data-dys-dot': '',
+                [r.tone === 'bad' ? 'data-bad' : r.tone === 'warn' ? 'data-warn' : 'data-ok']: '' }),
+              h('b', null, r.kind || '动作'),
+              h('span', { 'data-dys-grow': '', 'data-dys-ell': '' }, r.title || ''),
+              h('span', { 'data-dys-dim': '', 'data-dys-xs': '', 'data-dys-ell': '' }, r.detail || ''))))
+          : h(Empty, {
+              text: s.ok === false ? '调度接口还没连上 · 重启一次 DSH 就有下一轮和值班日志' : '今天还没有动作记录',
+              action: s.ok === false ? null : h(Btn, { label: '刷新', ghost: true, onClick: onRefresh }),
+            }))
     }
 
     /* ── 今天做了什么（回评 + 发布 + 出错，合成一条时间线） ───────────────
@@ -1644,6 +1377,7 @@ input[data-dys-in]::placeholder{color:var(--dys-dim);}
       const [feedBusy, setFeedBusy] = useState(false)
       const [theme, setTheme] = useState('dark')
       const [forcingInbox, setForcingInbox] = useState(false)
+      const [pal, setPal] = useState(false)
       const rootRef = useRef(null)
       const [cols, setCols] = useState('2')
       /* 当前看哪一区。记住上次停在哪儿；旧版本的 tab 名（picks/inbox/digest）映射到新四区。 */
@@ -1688,7 +1422,7 @@ input[data-dys-in]::placeholder{color:var(--dys-dim);}
         return () => { dead = true }
       }, [])
 
-      const base = ['/status', '/budget', '/config', '/watch', '/duty', '/queue', '/settings', '/autopilot', '/trend?days=14', '/publishes?n=30', '/ledger?n=40', '/errors?n=20']
+      const base = ['/status', '/budget', '/config', '/watch', '/duty', '/queue', '/settings', '/autopilot', '/trend?days=14', '/publishes?n=30', '/ledger?n=40', '/errors?n=20', '/schedule', '/kill']
 
       useEffect(() => {
         load(base)
@@ -1722,6 +1456,25 @@ input[data-dys-in]::placeholder{color:var(--dys-dim);}
       const reloadAll = useCallback(async (extra) => {
         await load(base.concat(extra || []))
       }, [load])
+
+      /* 键盘：Linear/Vercel 那套最值钱的一条。输入框里不抢键，避免打不了字。 */
+      useEffect(() => {
+        const onKey = (e) => {
+          const tag = (e.target && e.target.tagName) || ''
+          if (/INPUT|TEXTAREA|SELECT/.test(tag)) return
+          const k = String(e.key || '').toLowerCase()
+          if ((e.metaKey || e.ctrlKey) && k === 'k') { e.preventDefault(); setPal((v) => !v); return }
+          if (e.key === 'Escape') { setPal(false); return }
+          if (pal) return
+          if ('1234'.includes(e.key) && !e.metaKey && !e.ctrlKey) {
+            setView(['today', 'reply', 'find', 'settings'][Number(e.key) - 1]); return
+          }
+          if (k === 'r' && !e.metaKey && !e.ctrlKey) { reloadAll(); return }
+          if (e.key === '/') { e.preventDefault(); setPal(true) }
+        }
+        window.addEventListener('keydown', onKey)
+        return () => window.removeEventListener('keydown', onKey)
+      }, [pal, reloadAll])
 
       /* 「重新挑一遍」= 忽略缓存真跑一轮。跑完再读一次日常那条 key ——
        * fresh=1 的结果只用来**写缓存**，不直接拿去渲染，用完就 drop 掉，
@@ -1760,6 +1513,21 @@ input[data-dys-in]::placeholder{color:var(--dys-dim);}
       const pubs = (get('/publishes?n=30') || {}).rows
       const ledger = (get('/ledger?n=40') || {}).rows
       const errs = (get('/errors?n=20') || {}).rows
+      /* 宿主把 index.js 常驻内存：新增的 /schedule 要重启才有。没连上时给一份
+       * 由现有数据拼的降级快照，看板不空白、也不显示点了会 404 的按钮。 */
+      const scheduleRaw = get('/schedule')
+      const schedule = (scheduleRaw && scheduleRaw.ok) ? scheduleRaw : {
+        ok: false, day: '', paused: false, points: [], spreadMin: 0,
+        hero: {
+          pending: badges.reply != null ? badges.reply : null,
+          quotaLeft: (budget && budget.messages && budget.messages.left != null) ? budget.messages.left : null,
+          lastReply: (ledger && ledger.length)
+            ? { ok: true, when: ago(ledger[0].at) || hhmm(ledger[0].at), error: '' } : null,
+        },
+        next: { action: 'unknown', level: 'ok', label: '', reason: '重启 DSH 后可见下一轮与暂停' },
+        summary: {}, health: { level: 'ok', failures: 0 },
+        log: { items: [] }, funnel: { hasData: false },
+      }
       const refreshing = loading['/status'] || loading['/budget']
       const logged = !!(status && status.ok)
 
@@ -1793,6 +1561,7 @@ input[data-dys-in]::placeholder{color:var(--dys-dim);}
         forcing: forcingInbox,
         // 发完消息要看到自己那条：缓存不会自动包含它，只能真刷一轮
         onAfterSend: () => { forceInbox(); load(['/budget']) },
+        onFeed: () => { setView('find'); runFeed() },
       })
       const nodeBudget = h(Budget, { data: budget, err: errOf('/budget'), loading: loading['/budget'], onReload: () => load(['/budget']) })
       const nodeOps = h(Ops, {
@@ -1826,13 +1595,14 @@ input[data-dys-in]::placeholder{color:var(--dys-dim);}
         ledger, pubs, errs,
         loading: loading['/ledger?n=40'] || loading['/publishes?n=30'] || loading['/errors?n=20'],
       })
+      const nodeDutyLog = h(DutyLog, { schedule, onRefresh: () => load(['/schedule', '/runs?limit=30']) })
 
       /* 四个区 = 四个动词：看（今天）· 回（回应）· 找（找内容）· 调（设置）。
        * 以前按模块分组，同一个动作被拆到几个区里（刷视频就拆成了三份），
        * 于是"我想刷点新东西"要先想清楚点哪个入口 —— 那说明分组错了。 */
       const VIEWS = [['today', '今天'], ['reply', '回应'], ['find', '找内容'], ['settings', '设置']]
       const viewCards = {
-        today: [nodeBudget, nodeDigest, nodeTrend],
+        today: [nodeBudget, nodeDutyLog, nodeDigest, nodeTrend],
         reply: [nodeInbox, nodeAuto, nodeOps],
         find: [h(Picks, { onOpen: openInBot }), nodeFeed],
         settings: [nodeSettings],
@@ -1847,8 +1617,26 @@ input[data-dys-in]::placeholder{color:var(--dys-dim);}
         style: { '--dys-cols': cols },
       },
         h(Head, {
-          status, budget, watch,
+          status, budget, watch, schedule, kill: get('/kill'),
           refreshing, onRefresh: () => { reloadAll(); load(['/inbox?limit=8']) },
+          onJump: (v) => { setView(v); try { localStorage.setItem('dys-view', v) } catch (_) {} },
+          onKill: async (on) => {
+            /* 开是止血，立刻执行；关是"恢复发送"，多问一句。 */
+            if (!on && typeof window !== 'undefined' && typeof window.confirm === 'function'
+              && !window.confirm('解除停损？解除后回评 / 私信 / 发布 / 删除会立刻恢复。')) return
+            try {
+              const r = await jpost('/kill', on ? { on: true, reason: '面板手动停损' } : { on: false })
+              if (!r || r.ok === false) setMsg({ ok: false, tag: 'kill', data: r })
+              await load(['/kill'])
+            } catch (e) {
+              setMsg({ ok: false, tag: 'kill', data: { ok: false, error: String((e && e.message) || e) } })
+            }
+          },
+          onPause: async (paused) => {
+            const r = await jpost('/schedule/pause', { paused })
+            if (r && r.ok) load(['/schedule'])
+            else setMsg({ ok: false, tag: 'schedule/pause', data: r })
+          },
         }),
 
         /* 四个动词一排，没有第二层 —— 找东西不用先想"它在哪个抽屉里" */
@@ -1886,6 +1674,20 @@ input[data-dys-in]::placeholder{color:var(--dys-dim);}
               }),
               h(Btn, { label: '刷新状态', onClick: () => reloadAll() })))
           : null,
+
+        pal ? h('div', { 'data-dys-pal': '', onClick: () => setPal(false) },
+          h('div', { 'data-dys-palbox': '', onClick: (e) => e.stopPropagation() },
+            h('div', { 'data-dys-paltitle': '' }, '跳到哪儿 · Esc 关掉'),
+            [['今天', () => setView('today')], ['回应', () => setView('reply')],
+              ['找内容', () => setView('find')], ['设置', () => setView('settings')],
+              ['刷新全部', () => reloadAll()],
+              ['刷一轮视频', () => { setView('find'); runFeed() }],
+              ...(schedule && schedule.ok ? [[schedule.paused ? '继续自动刷' : '暂停自动刷',
+                async () => { await jpost('/schedule/pause', { paused: !schedule.paused }); load(['/schedule']) }]] : []),
+            ].map(([label, fn], i) => h('button', {
+              key: i, 'data-dys-palitem': '', type: 'button',
+              onClick: () => { setPal(false); fn() },
+            }, label)))) : null,
 
         /* 调试信息收进抽屉：CDP 端口、uid 不该占一级界面。
          * b<N> 留在摘要行 —— 刷新后对不上就是吃了缓存，这是老规矩。 */

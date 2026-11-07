@@ -10,6 +10,7 @@
  *   node tools/dy.mjs delete --title "标题"          （只删标题完全匹配且只有一条时）
  *   node tools/dy.mjs ledger [--recent 8]
  *   node tools/dy.mjs doctor
+ *   node tools/dy.mjs schedule [--pause on|off]   （只读快照；和面板 /schedule 同一份数据）
  *
  * 输出：**一行 JSON 到 stdout**（`ok` 字段永远有）；失败也输出 JSON，退出码 1。
  * 这么设计是为了让插件、脚本、人看的是同一份东西。
@@ -25,13 +26,18 @@ import * as im from '../lib/im.mjs'
 import { share as shareCard } from '../lib/share.mjs'
 import { ensureBrowser, listTabs, hostOf, port, profileDir, version } from '../lib/cdp.mjs'
 import { checkQuota, recordReply, recent, stats, LIMITS } from '../lib/ledger.mjs'
+/* 出口记账统一走 sendlog：它内部 await，并按 cid/newCid 幂等。
+ * 2026-11-05 之前三个发送分支各写各的，结果一个没 await、一个压根没调 —— 账全丢了。 */
+import { recordOutbound } from '../lib/sendlog.mjs'
 import * as budget from '../lib/budget.mjs'
 import * as inbox from '../lib/inbox.mjs'
 import * as feed from '../lib/feed.mjs'
 import { publish as publishRun, validate, WHO, DECLARE } from '../lib/publish.mjs'
 import { checkFiles } from '../lib/check-upload.mjs'
 import { listSnapshots, saveSnapshot, restoreSnapshot } from '../lib/snapshot.mjs'
+import { markDryRun, markPublished, needsFirstRunDry } from '../lib/firstrun.mjs'
 import { planAtReply } from '../lib/policy.mjs'
+import { logRun } from '../lib/runlog.mjs'
 
 const argv = process.argv.slice(2)
 const CMD = String(argv[0] || '').trim()
@@ -48,11 +54,41 @@ const envNum = (k, d) => {
 }
 const allOf = (k) => argv.reduce((acc, a, i) => (a === k && argv[i + 1] ? (acc.push(argv[i + 1]), acc) : acc), [])
 
-const out = (o) => { process.stdout.write(JSON.stringify(o, null, 1) + '\n') }
+const T0 = Date.now()
+/* 每条 CLI 的最终输出都从这里走 —— 顺手记一行「动作账」。
+ * 只记结果不记过程：排查时要的是「什么时候、对谁、成没成、卡在哪」。 */
+const out = (o) => {
+	try {
+		logRun({
+			kind: CMD || 'cli',
+			target: (o && (o.aweme || o.cid || o.nick || o.to || o.n || '')) || '',
+			ok: !(o && (o.ok === false || o.error)),
+			stage: (o && o.stage) || '',
+			error: (o && (o.error || o.why)) || '',
+			took: Date.now() - T0,
+		})
+	} catch { /* 记账失败不影响输出 */ }
+	process.stdout.write(JSON.stringify(o, null, 1) + '\n')
+}
 const die = (o, code = 1) => { process.stdout.write(JSON.stringify({ ok: false, ...o }, null, 1) + '\n'); process.exit(code) }
 
+/* 总闸在 CLI 这一层也要过一遍：DSH 工具那层挡住的只是"模型调工具"，
+ * 而人在终端里跑 `dy.mjs reply` 是另一条路。同一个 KILL 文件，两条路都得认。
+ * 只挡会写出去的动作；--dry 和只读命令照常（出事时更需要看现场）。 */
+{
+	const WRITE = new Set(['reply', 'dm-send', 'share', 'at-reply', 'comment-self', 'comment-at', 'delete', 'delcomment'])
+	const writeNow = CMD === 'publish' ? (has('--publish') || has('--draft'))
+		: CMD === 'dm' ? Boolean(argOf('--text'))
+			: CMD === 'queue' ? (String(argv[1] || argOf('--action', 'list')) === 'retry')
+				: WRITE.has(CMD)
+	if (CMD !== 'kill' && writeNow && !has('--dry')) {
+		const { isKilled, killedReply } = await import('../lib/killswitch.mjs')
+		if (isKilled()) die({ ...killedReply(CMD), via: 'cli' })
+	}
+}
+
 const HELP = {
-	commands: ['status', 'works', 'detail', 'likes', 'notices', 'search', 'comments', 'replies', 'reply', 'delcomment', 'publish', 'quick', 'latest', 'check', 'snapshot', 'delete', 'ledger', 'cost', 'doctor', 'trend', 'queue', 'watch', 'login', 'duty', 'dm', 'share', 'names', 'inbox', 'budget', 'dm-send', 'at-reply', 'feed', 'comment-self', 'comment-at', 'digest'],
+	commands: ['status', 'works', 'detail', 'likes', 'notices', 'search', 'comments', 'replies', 'reply', 'delcomment', 'publish', 'quick', 'latest', 'check', 'snapshot', 'delete', 'ledger', 'cost', 'doctor', 'trend', 'queue', 'watch', 'login', 'duty', 'dm', 'share', 'names', 'inbox', 'budget', 'dm-send', 'at-reply', 'feed', 'comment-self', 'comment-at', 'digest', 'kill', 'schedule', 'unattended', 'engage'],
 	limits: LIMITS,
 	who: WHO,
 	declare: DECLARE,
@@ -68,8 +104,11 @@ try {
 	if (CMD === 'doctor') {
 		const v = await version()
 		const tabs = v ? await listTabs() : []
+		const { isKilled, killInfo } = await import('../lib/killswitch.mjs')
 		out({
 			ok: Boolean(v),
+			/* 停损开着的时候，doctor 必须第一眼就看出来 —— 否则"为什么发不出去"要查半天。 */
+			kill: { on: isKilled(), info: killInfo() },
 			cdp: v ? { up: true, browser: v.Browser, port: port() } : { up: false, port: port(), hint: '会自己起一个；起不来就手动开' },
 			profile: profileDir(),
 			profileExists: existsSync(profileDir()),
@@ -78,6 +117,70 @@ try {
 			stats: stats(),
 		})
 		process.exit(v ? 0 : 1)
+	}
+
+	if (CMD === 'kill') {
+		const { isKilled, killInfo, killFile, setKill } = await import('../lib/killswitch.mjs')
+		const action = String(argv[1] || 'status').trim()
+		if (action === 'on') out(setKill(true, argOf('--reason', '命令行手动停损')))
+		else if (action === 'off') out(setKill(false))
+		else out({ ok: true, killed: isKilled(), info: killInfo(), file: killFile() })
+		process.exit(0)
+	}
+
+	if (CMD === 'unattended') {
+		const { readSettings, writeSettings } = await import('../lib/settings.mjs')
+		const { windowState } = await import('../lib/unattended.mjs')
+		const sub = String(argv[1] || 'status')
+		const patch = {}
+		if (sub === 'on' || sub === 'off') {
+			const { isKilled } = await import('../lib/killswitch.mjs')
+			if (sub === 'on' && isKilled()) die({ stage: 'killswitch', error: '停损开着，先把 KILL 解了再开无人值守' })
+			patch.unattendedPublish = sub === 'on'
+		}
+		if (argOf('--from')) patch.unattendedFrom = argOf('--from')
+		if (argOf('--to')) patch.unattendedTo = argOf('--to')
+		if (argOf('--per')) patch.unattendedPerDay = numOf('--per', 1)
+		if (Object.keys(patch).length) {
+			const w = writeSettings(patch)
+			if (!w.ok) die({ stage: 'settings', error: w.error })
+		}
+		out({ ok: true, ...windowState(readSettings()) })
+		process.exit(0)
+	}
+
+	if (CMD === 'engage') {
+		const { readSettings, writeSettings } = await import('../lib/settings.mjs')
+		const { planEngage, authorsOf, usedToday, waitGap } = await import('../lib/engage.mjs')
+		const sub = String(argv[1] || 'status')
+		const patch = {}
+		if (argOf('--authors')) patch.engageAuthors = argOf('--authors')
+		if (sub === 'on' || sub === 'off') {
+			const { isKilled } = await import('../lib/killswitch.mjs')
+			if (sub === 'on' && isKilled()) die({ stage: 'killswitch', error: '停损开着，先把 KILL 解了' })
+			patch.engageOn = sub === 'on'
+		}
+		if (Object.keys(patch).length) {
+			const w = writeSettings(patch)
+			if (!w.ok) die({ stage: 'settings', error: w.error })
+		}
+		const S = readSettings()
+		if (sub === 'plan') {
+			const { load } = await import('../lib/picks.mjs')
+			out(planEngage(S, { items: load() }))
+		} else {
+			out({ ok: true, on: S.engageOn, authors: authorsOf(S), perDay: S.engagePerDay, used: usedToday().count, waitSec: waitGap(new Date(), S.engageGapSec) })
+		}
+		process.exit(0)
+	}
+
+	if (CMD === 'schedule') {
+		const { readSnapshot } = await import('../lib/dashboard.mjs')
+		const { setPaused } = await import('../lib/roundstate.mjs')
+		const p = argOf('--pause')
+		if (p === 'on' || p === 'off') setPaused(p === 'on')
+		out(readSnapshot())
+		process.exit(0)
 	}
 
 	if (CMD === 'status') {
@@ -252,8 +355,12 @@ try {
 		const thread = planThread
 		const r = await api.reply({ aweme, text, root: thread, replyTo: planReplyTo })
 		if (r.ok) {
-			recordReply({ aweme, cid, root, authorUid: author, text, reason, newCid: r.cid })
-			budget.record({ ch: 'comment', peer: author, thread: root || cid, note: 'reply ' + cid })
+			/* 记账统一走 sendlog：它自己 await（以前没 await 会被 process.exit 掐掉），
+			 * 并按 cid 幂等（重复调用只记一次）。 */
+			await recordOutbound({
+				aweme, cid, root, authorUid: author, text, reason, newCid: r.cid,
+				ch: 'comment', thread: root || cid, note: 'reply ' + cid,
+			})
 		}
 		out({ ...r, stage: 'api', quota: stats(aweme), budget: bq.quota.messages })
 		process.exit(r.ok ? 0 : 1)
@@ -279,8 +386,33 @@ try {
 		}
 		const v = validate(opts)
 		if (!v.ok) die({ stage: 'validate', errors: v.errors, plan: v.plan })
-		if (has('--dry')) { out({ ok: true, stage: 'dry', plan: v.plan }); process.exit(0) }
+		/* 声明必填 + 首跑 dry：规矩只写一份，CLI 也不能绕（工具层同样这两道）。 */
+		if (opts.publish || opts.draft) {
+			if (!opts.declare) die({ stage: 'declare', error: '要 --declare（一般 ai）；真发不许 none', options: DECLARE })
+			if (opts.publish && opts.declare === 'none') die({ stage: 'declare', error: '真发不能挂「无声明」' })
+		}
+		if (opts.publish && needsFirstRunDry()) {
+			die({ stage: 'first-run', error: '这台机器还没跑过一次成功的 dry 发布；先 `dy.mjs publish … --dry` 走一遍' })
+		}
+		/* 无人值守：只有显式 --auto 才走这条路，且四道闸缺一条就退回人工。 */
+		if (has('--auto') && opts.publish) {
+			const { checkAuto } = await import('../lib/unattended.mjs')
+			const { readSettings } = await import('../lib/settings.mjs')
+			const gate = checkAuto(readSettings())
+			if (!gate.ok) die({ stage: 'unattended', reason: gate.stage, error: gate.reason })
+		}
+		if (has('--dry')) {
+			try { markDryRun('cli publish --dry') } catch { /* 状态写不进去不影响演练结果 */ }
+			out({ ok: true, stage: 'dry', plan: v.plan }); process.exit(0)
+		}
 		const r = await publishRun(opts)
+		try { if (opts.publish && r && r.ok !== false) markPublished() } catch { /* 记账失败不该改结果 */ }
+		try {
+			if (has('--auto') && opts.publish) {
+				const { recordAuto } = await import('../lib/unattended.mjs')
+				recordAuto({ ok: Boolean(r && r.ok !== false), title: opts.title || '', declare: opts.declare || '' })
+			}
+		} catch { /* 账本写不进去，不该把发布结果变成失败 */ }
 		out(r)
 		process.exit(r.ok ? 0 : 1)
 	}
@@ -505,8 +637,11 @@ try {
 		const thread = plan.thread
 		const r = await api.reply({ aweme, text, root: thread, replyTo: plan.replyTo })
 		if (r.ok) {
-			budget.record({ ch: 'at', peer: author, thread: plan.thread, note: '@ ' + aweme })
-			recordReply({ aweme, cid, root, authorUid: author, text, reason: 'at', newCid: r.cid })
+			/* 同上：出口一个，记账在出口里。 */
+			await recordOutbound({
+				aweme, cid, root, authorUid: author, text, reason: 'at', newCid: r.cid,
+				ch: 'at', thread: plan.thread, note: '@ ' + aweme,
+			})
 		}
 		out({ ...r, stage: 'api', budget: q.quota.messages })
 		process.exit(r.ok ? 0 : 1)
@@ -607,7 +742,15 @@ try {
 			process.exit(0)
 		}
 		const r = await api.reply({ aweme, text, extra })
-		if (r.ok) budget.record({ ch: 'comment', peer: uid, thread: aweme, note: 'at ' + nick })
+		if (r.ok) {
+			/* 新发的顶层 @ 没有"被回的 cid"，但它同样是一次对外发送 ——
+			 * 以前只记额度不写账本，于是「今天做了什么」里看不到这条 @。 */
+			await recordOutbound({
+				aweme, cid: '', authorUid: uid, authorName: nick, text,
+				reason: 'comment-at ' + nick, newCid: r.cid,
+				ch: 'at', thread: aweme, note: 'at ' + nick,
+			})
+		}
 		out({ ...r, stage: 'api', at: nick, text, budget: q.quota.messages })
 		process.exit(r.ok ? 0 : 1)
 	}

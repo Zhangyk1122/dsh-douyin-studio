@@ -14,9 +14,15 @@
  * ============================================================================
  */
 import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { expectedCss, inlineCss } from '../lib/panelcss.mjs'
+import { contractIssues } from './typecheck.mjs'
+import { driftIssues } from './rules-drift.mjs'
+import { DEFAULTS } from '../lib/settings.mjs'
+import { titleHint } from '../lib/publish-rules.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(HERE, '..')
@@ -208,6 +214,163 @@ if (QUICK) {
 			? fails.join(' / ')
 			: files.length + ' 个文件全绿，共 ' + pass + ' 例'
 			+ (unknown.length ? '（' + unknown.length + ' 个文件例数未识别：' + unknown.join(',') + '）' : ''))
+}
+
+/* ⑥ 禁改区：不靠自觉，靠哈希 ----------------------------------------------- */
+{
+	const LOCK = join(HERE, 'protected.json')
+	let lock = null
+	try {
+		lock = JSON.parse(readFileSync(LOCK, 'utf8'))
+	} catch {
+		lock = null
+	}
+	if (!lock) {
+		add(true, '禁改区', '还没有 protected.json —— 跑一次 node tools/lock-protected.mjs 建基线')
+	} else {
+		const changed = []
+		const missing = []
+		for (const rel of Object.keys(lock)) {
+			try {
+				const sum = createHash('md5').update(readFileSync(join(ROOT, rel))).digest('hex')
+				if (sum !== lock[rel]) changed.push(rel)
+			} catch {
+				missing.push(rel)
+			}
+		}
+		const bad = changed.concat(missing)
+		add(bad.length === 0, '禁改区',
+			bad.length
+				? '被动过：' + bad.join(', ') +
+					'（真有必要就改完跑 node tools/lock-protected.mjs，并在 CHANGES 里写理由）'
+				: Object.keys(lock).length + ' 个文件哈希未变')
+	}
+}
+
+/* ⑦ 样式真源：client.js 里那段压缩 CSS 必须等于 assets/panel.css ----------- */
+{
+	const want = expectedCss(ROOT)
+	const got = inlineCss(readFileSync(join(ROOT, 'client.js'), 'utf8'))
+	add(Boolean(want) && want === got, '样式真源',
+		!want ? 'assets/panel.css 读不到'
+			: want === got ? 'client.js 与 assets/panel.css 一致（' + want.length + ' 字符）'
+				: '样式分叉了：跑 node tools/build-client.mjs 重新生成')
+}
+
+/* ⑧ 类型契约：纯模块的导出必须有 JSDoc，编辑器的 checkJs 才有东西可查 ----- */
+{
+	const r = contractIssues(ROOT)
+	add(r.issues.length === 0, '类型契约',
+		r.issues.length ? r.issues[0] + (r.issues.length > 1 ? ' 等 ' + r.issues.length + ' 处' : '')
+			: r.checked + ' 个纯模块 / ' + r.exports + ' 个导出都有 JSDoc')
+}
+
+/* ⑨ 发布链：两套脚本的标题/定时规则不许分叉 ----------------------------- */
+{
+	const r = driftIssues(ROOT)
+	add(r.ok, '发布规则',
+		r.issues.length ? r.issues[0] : r.notes.join('；'))
+}
+
+/* ⑩ 工具契约：工具 → SKILL.md → 发布规则，三处说同一件事 -----------------
+ * 审计里最便宜的错就是「文档写 55、代码是 30」这类：不跑不知道，跑一次也不报错。
+ * 这条检查两件事：每个注册的工具都被 SKILL.md 提到；标题上限只从 publish-rules 来。 */
+{
+	const src = readFileSync(join(ROOT, 'lib/tools.mjs'), 'utf8')
+	/* 第二批工具在 tools-extra.mjs —— 契约检查必须两边都看，不然"加了工具没写文档"照样漏。 */
+	const extra = readFileSync(join(ROOT, 'lib/tools-extra.mjs'), 'utf8')
+	const srcAll = src + '\n' + extra
+	const skill = readFileSync(join(ROOT, 'SKILL.md'), 'utf8')
+	const names = [...new Set([...srcAll.matchAll(/name:\s*'(douyin_studio_[a-z_]+)'/g)].map((m) => m[1]))]
+	const missing = names.filter((n) => !skill.includes(n))
+	const issues = []
+	if (names.length < 30) issues.push('只认出 ' + names.length + ' 个工具，注册写法可能变了')
+	if (missing.length) issues.push('SKILL.md 没写：' + missing.join(','))
+	if (/≤\s*55\s*字/.test(srcAll)) issues.push('工具描述还写着 55 字')
+	if (!/titleHint\(\)/.test(src)) issues.push('标题描述没走 publish-rules.titleHint()')
+	add(issues.length === 0, '工具契约',
+		issues.length ? issues.join(' / ') : names.length + ' 个工具都在 SKILL.md 里，标题上限 = ' + titleHint())
+}
+
+/* ⑪ 打包完整：npm 包里别缺运行时要用的东西 -------------------------------
+ * files 漏 assets/ 的话，装到别人机器上样式直接空 —— 本地跑着好好的，最难发现。 */
+{
+	let pkg = {}
+	try { pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')) } catch { /* ③ 已报 */ }
+	const files = Array.isArray(pkg.files) ? pkg.files : []
+	const need = ['index.js', 'client.js', 'lib', 'tools', 'assets', 'cordis.patch.yml', 'SKILL.md', 'README.md', 'jsconfig.json']
+	const missing = need.filter((n) => !files.some((f) => String(f).replace(/\/$/, '') === n))
+	const ghost = files.filter((f) => {
+		try { statSync(join(ROOT, String(f).replace(/\/$/, ''))); return false } catch { return true }
+	})
+	const issues = []
+	if (missing.length) issues.push('files 漏了：' + missing.join(','))
+	if (ghost.length) issues.push('files 指向不存在的：' + ghost.join(','))
+	add(issues.length === 0, '打包完整',
+		issues.length ? issues.join(' / ') : files.length + ' 条 files 都在，运行时该带的都带了')
+}
+
+/* ⑫ 默认只读：新装的插件不许一上来就在账号里自己跑 -----------------------
+ * B2-09 的落地检查。注意只查**默认值**：已经写进 settings.json 的显式配置不受影响。 */
+{
+	const idx = readFileSync(join(ROOT, 'index.js'), 'utf8')
+	const tools = readFileSync(join(ROOT, 'lib', 'tools.mjs'), 'utf8')
+	const issues = []
+	if (DEFAULTS.scanRounds !== 0) issues.push('settings 默认 scanRounds = ' + DEFAULTS.scanRounds + '（应为 0）')
+	if (!/watchOn:\s*z\.boolean\(\)\.default\(false\)/.test(idx)) issues.push('watchOn 默认不是 false')
+	if (!/isKilled\(\)/.test(tools)) issues.push('工具层没接总闸（isKilled）')
+	if (!/isKilled\(\)/.test(idx)) issues.push('index.js 没读总闸')
+	add(issues.length === 0, '默认只读',
+		issues.length ? issues.join(' / ') : '新装默认不刷、不盯、写操作过总闸')
+}
+
+/* ⑬ 命令行一致：HELP 里列的每条都得真有分支，反之亦然 ----------------------
+ * 「README 写了但命令不存在」是最伤信任的一种错：用户照着敲，得到一片错误。 */
+{
+	const src = readFileSync(join(ROOT, 'tools', 'dy.mjs'), 'utf8')
+	const help = (src.match(/commands:\s*\[([^\]]+)\]/) || [, ''])[1]
+	const listed = [...new Set([...help.matchAll(/'([a-z-]+)'/g)].map((m) => m[1]))]
+	const branches = [...new Set([...src.matchAll(/CMD === '([a-z-]+)'/g)].map((m) => m[1]))].filter((c) => c !== 'help')
+	const noBranch = listed.filter((c) => !branches.includes(c))
+	const noHelp = branches.filter((c) => !listed.includes(c))
+	const issues = []
+	if (noBranch.length) issues.push('HELP 有、代码没有：' + noBranch.join(','))
+	if (noHelp.length) issues.push('代码有、HELP 没列：' + noHelp.join(','))
+	add(issues.length === 0, '命令行一致',
+		issues.length ? issues.join(' / ') : branches.length + ' 条命令与 HELP 一致')
+}
+
+/* ⑭ 无人值守与互动：新能力默认必须是关的 ---------------------------------
+ * 破甲之后"没人盯着也能发"第一次真的成立，所以默认值这件事比别的都重要：
+ * 任何一个仓库更新把这两项改成 true，都等于替所有使用者做了决定。 */
+{
+	const issues = []
+	if (DEFAULTS.unattendedPublish !== false) issues.push('unattendedPublish 默认不是 false')
+	if (DEFAULTS.engageOn !== false) issues.push('engageOn 默认不是 false')
+	const tools = readFileSync(join(ROOT, 'lib', 'tools.mjs'), 'utf8')
+	const extra = readFileSync(join(ROOT, 'lib', 'tools-extra.mjs'), 'utf8')
+	if (!/checkAuto\(/.test(tools)) issues.push('publish 没接无人值守闸（checkAuto）')
+	if (!/isKilled\(\)/.test(extra)) issues.push('新工具没接总闸')
+	add(issues.length === 0, '新能力默认关',
+		issues.length ? issues.join(' / ') : '无人值守/互动都默认关，开也要过四道闸')
+}
+
+/* ⑮ 提示词守则：模型层能看到的规矩，得有一份在仓库里 ---------------------
+ * 工具描述管"这一下怎么调"，守则管"这一类事该不该做"。两份都要有，
+ * 而且都要能被 diff —— 写在某个人的 prompt-inject.md 里就等于没有。 */
+{
+	const file = join(ROOT, 'prompts', 'operate.md')
+	let md = ''
+	try { md = readFileSync(file, 'utf8') } catch { /* 下面统一报 */ }
+	const need = ['dry', 'declare', 'stop']
+	const missing = need.filter((k) => !new RegExp(k, 'i').test(md))
+	const skill = readFileSync(join(ROOT, 'SKILL.md'), 'utf8')
+	const issues = []
+	if (!md) issues.push('prompts/operate.md 不存在')
+	if (missing.length) issues.push('守则缺关键词：' + missing.join(','))
+	if (!/操作守则/.test(skill)) issues.push('SKILL.md 没引用守则')
+	add(issues.length === 0, '提示词守则',
+		issues.length ? issues.join(' / ') : '守则在 prompts/operate.md，SKILL.md 已引用（' + md.length + ' 字符）')
 }
 
 /* ── 汇总 ─────────────────────────────────────────────────────────────── */

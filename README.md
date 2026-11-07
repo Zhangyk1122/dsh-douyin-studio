@@ -5,6 +5,19 @@
 
 一套 core，两层入口：**DSH 工具**（`douyin_studio_*`）和**命令行**（`node tools/dy.mjs …`）。
 
+> ## 先读这一段（风险与定位）
+>
+> **它是给单个账号、私人在自己的机器上用的工具，不是给陌生人批量运营的服务。**
+>
+> - 它**驱动你真登录着的浏览器**：发出去的话、点掉的发布、删掉的评论，都是真的、撤不回来。
+> - 抖音没有给这种用法发许可证。自动化操作**可能触发风控**（限流、验证码、临时封禁），
+>   风险由使用者承担；出问题时唯一的急救是**立刻停手**（见下面「停损」），不是重试。
+> - 自主执行（自己回私信 / 自己发作品 / 盯私信）**默认全关**。要开，请先看清楚每一行开关
+>   管的是什么，并且从 `draft` 起步。
+> - 别拿它做刷量、刷评、多账号矩阵、代运营别人的号。这些不在设计里，也不在支持范围里。
+> - 代码里所有"最后一下"都留了闸：`confirm: true`、`--publish`、首次发布先 `dry`、额度与去重。
+>   **别为了让流程跑顺就绕过它们** —— 那是这套东西唯一的安全边际。
+
 ## 装
 
 前提：Windows + 一个登录着抖音的 Chrome/Edge + DSH。
@@ -38,6 +51,22 @@ node tools/dy.mjs status        # 我是谁 + 今天还能发几条
 - **默认只存草稿**：`publish` 不带 `--publish` 就停在发布页；`--who` 默认 `private`。
 - **每天有上限**：发布 5、评论 20、私信 15、@ 10、自己作品下 5，小时级还有更细的闸（`lib/budget.mjs`，别改）。
 - **删除不可撤销**：`delete` / `delcomment` 只认完全匹配且唯一命中，删之前先 `--dry` 看一眼。
+- **首跑必须 dry**：新机器第一次 `publish` 只能 `dry`，跑通一次才解锁真发（`$DOUYIN_STUDIO_HOME/first-run.json`）。
+- **声明必填**：真发/存草稿必须给 `declare`（一般 `ai`），真发不许 `none`。
+
+### 停损（出事就按这个）
+
+任何一个写操作都可以被一个文件全局挡住：
+
+```bash
+node tools/dy.mjs kill on  --reason "风控提示 1200"   # 立刻停
+node tools/dy.mjs kill status                        # 看现在停没停、为什么
+node tools/dy.mjs kill off                           # 确认安全再解除
+```
+
+等价于在 `$DOUYIN_STUDIO_HOME/KILL` 放一个文件（内容 `{"at":"…","reason":"…"}`）。
+开着的时候：回评 / 私信 / @ / 分享 / 发布 / 删除 / 队列重试一律拒；只读动作不受影响。
+DSH 里对应工具 `douyin_studio_kill`，面板上同一个开关读的是同一份文件。
 
 ## 它和 dsh-douyin-scroll 的区别
 
@@ -167,6 +196,39 @@ node tools/dy.mjs quick --video "C:\Users\admin\.dsh\media\onebot\media_xxx.mp4"
 
 标题取文案第一行（图文 20 / 视频 30 字，超了自动截），简介用整段原文；默认 `private` +
 只存草稿，要真发再加 `--publish`，要公开再加 `--who public`。走的是同一套预算账本（发布 5 条/天）。
+
+## 无人值守发布（默认关）与主动互动灰度
+
+两件"没人盯着"的事。默认都是关的 —— 不是保守，是因为这两条一旦判错，代价是公开的。
+
+**无人值守**：开了也只是"允许"。真发要同时满足四条，缺一条退回人工：
+
+1. `settings.unattendedPublish === true`
+2. 现在在 `unattendedFrom`–`unattendedTo` 窗口里（跨零点也认）
+3. 今天自动发的条数 < `unattendedPerDay`
+4. 首跑已经成功 dry 过，且总闸没开
+
+```bash
+node tools/dy.mjs unattended status
+node tools/dy.mjs unattended on --from 20:00 --to 23:30 --per 1
+node tools/dy.mjs publish --img "..." --title "..." --declare ai --auto --publish
+```
+
+自动发的每一条都落 `autopublish.jsonl`（日期、标题、声明、成败），额度按这份账本数。
+
+**主动互动**：这一版**只出清单，不出手**。从已收集的候选里挑白名单作者的视频，
+同一作者一天最多碰一次，整体不超过 `engagePerDay`，两条之间至少 `engageGapSec`：
+
+```bash
+node tools/dy.mjs engage status
+node tools/dy.mjs engage on --authors "小A,小B"
+node tools/dy.mjs engage plan      # 只打印"今天会碰谁"
+```
+
+真动作仍然走 `comment_at` / `share`，且必须 `confirm`。白名单为空 = 一条都不碰。
+
+**后台作业**：一轮刷完是一个作业（`lib/jobs.mjs`），失败退避重试两次，每一步之前看总闸，
+账在 `jobs.jsonl`；`dy.mjs jobs` 或 `douyin_studio_jobs` 能查"昨晚那一轮为什么没跑"。
 
 ## 什么时候才动（谷时窗口）
 

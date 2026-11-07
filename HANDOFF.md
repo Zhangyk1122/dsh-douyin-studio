@@ -12,15 +12,22 @@
 和 **设置页面板**。引擎全在 `lib/`，`index.js` 只管配置 + HTTP 路由 + 生命周期，`lib/tools.mjs` 管工具注册
 （2026-11-03 从 index.js 拆出来的，工具只做参数整形），`client.js` 只管画界面。
 
-**当前状态**：`PANEL_BUILD = 21`（页面底部「诊断与版本 · b21」），`node tools/check.mjs` 全绿，
-19 个测试文件 242 例。面板现在是 8 张卡：收件箱 / 今天做了什么 / 自主执行 / 机器人设置 / 刷视频 / 消息额度 / 后台 / 粉丝趋势。
+**当前状态**：`PANEL_BUILD = 35`（页面底部「诊断与版本 · b35」），`node tools/check.mjs` 全绿，
+27 个测试文件 362 例，81 个文件可解析，禁改区 7 个哈希未变。
+面板现在是 8 张卡：收件箱 / 今天做了什么 / 自主执行 / 机器人设置 / 刷视频 / 消息额度 / 后台 / 粉丝趋势。
+
+> ⚠️ **这一页的数字会过期。** 版本以 `client.js` 的 `PANEL_BUILD` 为准，体量以 `check.mjs` 的输出为准；
+> 两者对不上时，信代码，然后把这里改掉（2026-11-05 修过一次：原来写的是 b21 / 242 例）。
 卡片标题都带内联 SVG 图标（`Ico`）；「自主执行」是四行开关（回私信 / 回评论 / 发作品 / 报平安），
 **没有任何让人写话的输入框**——回什么、发哪个由它自己判断，人只定边界。
 
 **核心设计取舍**：宁可给 2 分钟前的列表，也不让人盯着转圈。所有"慢"的地方都靠缓存 + 后台补，不靠优化那十几秒本身。
 
 **活实例怎么验**（2026-11-03 查清，别再试错）：
-- 插件真正跑在 **DSH 桌面端**：`http://127.0.0.1:51549`（进程 `DeepSeek Harness`）。
+- 插件真正跑在 **DSH 桌面端**（进程 `DeepSeek Harness`）。
+  ⚠️ **端口每次启动都可能变**：2026-11-05 是 51549，重启后变成 58337。
+  别抄死数字，先 `Get-NetTCPConnection -State Listen` 找 `DeepSeek Harness` 的监听端口，
+  再用 `GET /api/douyin-studio/config` 试 200/404 确认哪一个加载了本插件。
   `GET /api/douyin-studio/config` 直接 200，**不需要令牌**（插件路由绕过宿主鉴权）。
 - `127.0.0.1:3080 / 3081` 是 `dsh web`（web profile），**没加载本插件**，打过去全是 404。
 - **`client.js` 刷新页面即生效**（按需读盘）；**`index.js` 必须重启 DSH**（启动时加载）。
@@ -32,10 +39,10 @@
 ## 2. 地图：哪些能动，哪些别碰
 
 ```
-index.js         680 行  HTTP 路由 + 配置 + 生命周期 ── 可改，但只在「路由壳」层
+index.js        1029 行  HTTP 路由 + 配置 + 生命周期 ── 可改，但只在「路由壳」层
 lib/tools.mjs    570 行  douyin_studio_* 工具注册（只整形参数、起 CLI）── 加工具改这里
-client.js       1565 行  设置页（无构建，手写 h()）── 可改，改完必须跑预览
-lib/             39 个    引擎
+client.js       1937 行  设置页（无构建，手写 h()）── 可改，改完必须跑预览
+lib/             47 个    引擎
   ├─ proc.mjs            子进程（异步，唯一入口）        ← 可改
   ├─ guard.mjs           跨站守卫（纯函数）              ← 可改
   ├─ cache.mjs           缓存策略（纯函数）              ← 可改
@@ -51,9 +58,13 @@ lib/             39 个    引擎
   ├─ budget.mjs          额度表                          ← 禁改（影响账号存续）
   ├─ api.mjs             请求签名/频率                   ← 禁改
   ├─ im-send.mjs         真发私信                        ← 禁改（不可逆）
+  ├─ selfid.mjs           机器人自己的 uid（落盘，自检要用）
+  ├─ selfcheck.mjs        运行期行为自检（纯函数，10 条规则）← 2026-11-05 新增
   └─ publish-*.mjs       发布链路                        ← 禁改（见 6.1）
-tests/           19 个    纯本地逻辑测试（242 例）
+tests/           27 个    纯本地逻辑测试（362 例）
 tools/check.mjs           交付前自检（唯一验收入口）
+tools/selfcheck.mjs       行为自检（只读盘，查规则有没有被真的执行）
+tools/lock-protected.mjs  更新禁改区哈希基线（+ protected.json）
 tmp/preview/              面板沙盘（假数据，真样式）
 tmp/smoke-autopilot.mjs   自主执行演练（临时 HOME + dry，不真发）
 ```
@@ -78,6 +89,16 @@ tmp/smoke-autopilot.mjs   自主执行演练（临时 HOME + dry，不真发）
 node tools/check.mjs          # 全套：语法 / 硬规矩 / 依赖 / 不变量 / 体量 / 测试
 node tools/check.mjs --quick  # 跳过测试，秒级（写代码过程中反复用这个）
 ```
+
+**它查的是"代码对不对"。规则有没有被真的执行，用另一条：**
+
+```bash
+node tools/selfcheck.mjs                    # 查今天的账本/额度/静音/去重
+node tools/selfcheck.mjs --self-uid 123456  # 带上机器人 uid，能查"回错到自己"
+```
+
+两者分工要记牢：`check.mjs` 全绿而线上出事，是 11-05 那天发生过的事（四个 bug 同时存在，
+验收一路 PASS）。改完代码跑 `check`，怀疑行为跑 `selfcheck`。
 
 输出长这样，**只认最后一行**：
 
@@ -678,3 +699,372 @@ UI 四个区截图 + probe-ui              → textBugs 0 / overflow 0，唯一 
 
 **验证**：`input[data-dys-in]` 与空框的计算背景现在都是 `oklab(... / 0.06)`，完全一致；
 深/浅两套截图各一张；`check.mjs` PASS（client.js 1939/1940）。
+
+---
+
+## 19. 2026-11-05 傍晚：行为自检 + 禁改区哈希 + 文档校正
+
+> 这一轮**没有改任何发送逻辑**，只加"看得见"的东西。四个套餐里的 A 部分。
+
+### 新增
+
+| 文件 | 干什么 |
+|---|---|
+| `lib/selfcheck.mjs` | 运行期行为自检，纯函数，10 条规则（回错到自己 / 重复 cid / 重复楼根 / 同人超限 / 静音时段 / 作者字段缺失 / 未来时间 / 额度跨天 / 超发 / 值班安静） |
+| `tools/selfcheck.mjs` | 入口，只读盘，`--json` / `--self-uid`；退出码 0/1 |
+| `tests/selfcheck.test.mjs` | 23 例 |
+| `lib/selfid.mjs` | 机器人自己的 uid 落 `self.json`（ownerUid 是主人的，不是她的） |
+| `tools/lock-protected.mjs` + `protected.json` | 禁改区 7 个文件的 md5 基线 |
+
+`check.mjs` 新增第 ⑥ 条：禁改区哈希变了就红。**以后要改 `budget/api/im-send/publish-*`，
+必须先跑 `node tools/lock-protected.mjs` 更新基线并在 CHANGES 里写理由** —— 否则等于拆刹车。
+
+### 实测发现（都不是猜的）
+
+1. **账本 20 条记录，`authorUid` 有值的 0 条** —— 闸④「每人每天 2 条」对这批历史记录完全无效。
+   11-05 的修复只对新记录生效，旧账补不回来。
+2. **她自己的 uid = `4237967833704249`（小肥鱼（陈汐））**。作品 `7700573957753228559` 下第一条评论
+   就是她自己发的，楼中楼里也有她自己的回复 —— 这些都会进候选池。
+   **以前没有 selfUid，"回错到自己"根本无从判断。现在能了。**
+3. **值班安静 19 小时**（最近一次出口 11-04 23:09），而 `picks.json` 17:10 还在更新。
+   刷视频在跑、出口没动 —— 这正是新加的 `duty-silent` 第一条真实报警。
+4. 楼中楼 dry 落点正确：`reply_id=7701086319522906918`（楼根）、
+   `reply_to_reply_id=7701225645871842057`（被回那条），quota 0/20、0/10。
+
+### 验收
+
+```
+node tools/check.mjs   → PASS  81 文件 / 27 测试文件 / 362 例 / 禁改区 7 个哈希未变
+node tools/selfcheck.mjs → ✓ 通过（1 warn：值班安静 19 小时）
+```
+
+### 19.1 实弹验证时抓到的真 bug：记账被 process.exit 掐掉
+
+**现象**：`dy.mjs reply` 真发一条楼中楼，抖音侧返回 200、评论确实出现了（新 cid `7704629910287549210`），
+但 `ledger.json` **一条没多**（还停在 11-04 的 20 条）。
+
+**根因**：`recordReply` 是 `async`，`dy.mjs` 里没 `await` 就走到下一行 `process.exit(...)`。
+`budget.record` 是同步函数所以记上了 —— 于是表现为**额度扣了、去重没记**，这是最坏的组合：
+- 闸①（同 cid 只回一次）失效 → 同一条评论可以无限重复回
+- 闸④（同人每天 N 条）失效 → 同一个人可以被连着回
+- 而且账本看起来"很干净"，因为根本没写进去
+
+**两处修复**（`tools/dy.mjs`，reply 分支 + at-reply 分支）：`await recordReply(...)`。
+
+**验证**：补记那条真实发送 → 再跑同一条 `--dry` → 返回
+`"why": "这条评论已经回过了（同一个 cid）"`。去重闸活了。
+
+> 这条同时解释了 11-05 上午"参数名对齐了但重复回评还在发生"——参数是第二层原因，
+> 这是第一层：那笔账压根没落盘。
+
+---
+
+## 20. 2026-11-05 晚：把"记账"收敛成一条路 + 对账工具
+
+> 依据：幂等键 / transactional outbox / reconciliation 这一套（Stripe 的 idempotency key、
+> n8n 的"非幂等节点不许自动重试"、以及"对账是标准控制手段而不是补救"）。
+
+### 20.1 三个改动
+
+| 文件 | 干什么 | 治的是哪个病 |
+|---|---|---|
+| `lib/sendlog.mjs`（新） | `recordOutbound()`：写账本 + 记额度合成一次调用，内部 `await`、按 cid/newCid 幂等，`bill:false` 可只补账不占额度 | 三个发送分支各写各的，忘一个就漏一次 |
+| `tools/dy.mjs`（改 3 处） | reply / at-reply / comment-at 全部改走 `recordOutbound` | comment-at 以前**压根不写账本**，只记额度 |
+| `lib/selfcheck.mjs` +3 例（改） | 新增 `ledger-gap`：今天额度记了 N 次、账本只有 M 条就报 error | 这类 bug 单看任一文件都正常，只有并排才看得见 |
+
+### 20.2 对账工具 `tools/reconcile.mjs`（新）
+
+```bash
+node tools/reconcile.mjs --aweme <id>   # 只报告
+node tools/reconcile.mjs --works 5      # 扫最近 5 条作品
+node tools/reconcile.mjs --fix          # 补账（不补额度）
+```
+
+**首次跑就抓到 14 条**：作品 `7700573957753228559` 下，线上她自己发的评论有 14 条账本里没有
+（1 条顶层 @ + 13 条楼中楼）。也就是说账本**从来不是"她说过什么"的完整记录**，
+过去所有去重闸都只对"值班自动回的 20 条"有效。
+
+> ⚠️ `--fix` 的时间戳是"现在"，历史评论会被算进今天。只建议补当天的漏账。
+
+### 20.3 验收
+
+```
+node tools/check.mjs      → PASS  83 文件 / 27 测试文件 / 365 例 / 禁改区 7 个未变
+node tools/selfcheck.mjs  → ✓ 通过  回复 2 条 / 出口 2 次 / 错误 0 · 提醒 0
+```
+
+---
+
+## 21. 2026-11-05 夜：人设接真源 + 线上对账接进自检
+
+### 21.1 人设不再有第二份（`lib/settings.mjs`）
+
+**改之前**：`settings.json` 里 `persona: ""`，注释写着"空 = 通用助手口吻"，
+而真正的人设卡在 `~/.dsh/profiles/desktop/qq-pet/identity.md`（5.7KB）+ `style.md`（7KB）。
+**同一个人在 QQ 和抖音说话不像，根因不是模型，是两份人设只有一份在喂。**
+
+**改之后**：新增设置 `personaSource`（`card` 默认 / `custom` / `off`）：
+
+| 值 | 行为 |
+|---|---|
+| `card` | 读人设卡的「我这个人」前 3 条 + 「唯一不动的底线」那一句（实测 248 字） |
+| `custom` | 只用面板里手写的 `persona` |
+| `off` | 通用口吻 |
+
+优先级：`off` → 手写 persona → 卡 → 通用。按 `mtime` 缓存，不会每轮 stat 两次。
+
+**取舍**：只取 3 条 + 底线，不塞全文。每轮都在付费，420 字是预算不是客套。
+`personaSource` 暂时**面板上没有输入框**（client.js 顶到 1940 行上限），改法：
+直接编辑 `~/.dsh/douyin-studio/settings.json`。
+
+⚠️ `personaLine` 由 `lib/autopilot.mjs` 在**宿主进程内**调用 ⇒ **要重启 DSH 才生效**。
+
+### 21.2 对账接进自检（`tools/selfcheck.mjs --online`）
+
+```bash
+node tools/selfcheck.mjs --online   # 本地 12 条规则 + 线上核账本（慢十几秒）
+```
+
+分级：**今天的漏账 = error**（去重闸此刻是坏的），**历史漏账 = warn**（老账，不影响今天）。
+不分级就会天天红，红到没人看。
+
+为什么放在 tools 而不是 `lib/selfcheck.mjs`：那边是纯函数（不读盘、不联网）。
+往里加网络，"自检自己会失败"，可信度就没了。
+
+### 21.3 数字
+
+```
+check.mjs   → PASS  84 文件 / 28 测试文件 / 373 例 / 禁改区 7 个未变
+selfcheck   → ✓ 0 error / 1 warn（19 条历史漏账）
+```
+
+**待处理**：那 19 条历史漏账不补 —— `--fix` 的时间戳是"现在"，会把它们算进今天。
+
+---
+
+## 22. 2026-11-05 深夜：两个线上反馈的根因
+
+### 22.1 「发视频不带文字」——根因不在发送，在**打开的页面不对**
+
+**复现**：`node tools/dy.mjs dm --to <ownerSec> --text "..." --dry`
+→ `{"ok":false,"error":"会话没打开（等不到输入框）","nick":"辰辰辰chen","log":["找到行 辰辰辰chen"]}`
+
+**根因**（现场 probe 抓到）：
+`openPage()` 只按**域名**挑标签页，**不导航**。上一步「分享视频」留下的标签页停在
+`/video/7681526730688271994`，而视频页的**分享面板**里好友行也带
+`[data-e2e="conversation-item"]` —— 于是 im-send「找得到行、双击没反应、等不到输入框」。
+`tellOwner` 里 `if (!(dr && dr.ok)) say = ''` 又把原因一起吞了，表现就是"只收到视频、没有字"。
+
+**修**：
+1. `lib/chrome.mjs` `openPage({navigate:true})`：选中的页≠目标就 `Page.navigate`。
+2. `lib/im.mjs` `send()`：发私信前先把它导航到 `https://www.douyin.com/chat`。
+3. `index.js` `tellOwner`：失败**不再静默** —— 原因写进 `notify-state.sayError`，
+   且只在"确认没发出去"的错上换目标重试一次。
+
+**验证**：同一命令重跑 → `{"ok":true,"dry":true,"log":["找到行 辰辰辰chen","输入框出现","文字已写入"]}`
+
+### 22.2 「回复有机器人腔」
+
+**根因**：提示词开头是「**你是这个抖音账号的主人**」——这句话把语气往客服/官方号带；
+而她的「说话方式」（括号小动作、篇幅跟随）从来没进过提示词，只吃了身份卡。
+
+**修**（`lib/settings.mjs` `personaFromCard`）：
+- 开头改成「你是下面这个人。说话像她本人，不像客服，也不像在运营一个账号」
+- 追加一句固定的说话方式：括号小动作、他短我短、禁用「感谢支持/很高兴为你/希望能帮到你」、不总结、不反问一串
+
+**实测**（`duty.generate`，1.2s）：
+> 「（把脸凑近窗玻璃看水珠）雨太大，镜头都糊了，明天补给你。」
+
+persona 长度 361 字（原 278），仍远低于 520 上限。
+
+### 22.3 验收
+
+```
+check.mjs   → PASS  84 文件 / 28 测试 / 373 例 / 禁改区 7 个未变
+selfcheck   → ✓ 0 error / 1 warn（今天 1 条回复没记作者 uid）
+```
+
+---
+
+## 23. 2026-11-05 晚：时间显示差 8 小时
+
+**现象**（用户截图）：@我 列表里 1 小时前那条显示成「9 小时前」。9 − 1 = 8，正好是东八区偏移。
+
+**根因**：抖音的 `create_date` 形如 `2026-11-05 10:26:24`，**无时区标记，实际是 UTC**。
+- `lib/inbox.mjs` 的 `AGE_MIN` 用 `Date.parse()` → 按本地解，差 8 小时
+- `client.js` 的 `ago()` 用 `new Date(iso)` → 同样差 8 小时
+- `picks.mjs:74` 早就修过这一处，但收件箱这条路没同步
+
+**修**：新建 `lib/reltime.mjs`，把时间口径收成一份：
+- `parseDouyinTime()`：无标记当 UTC；只有日期当本地零点；带 Z 原样；数字当毫秒
+- `toIsoZ()`：统一成带 Z 的 ISO，前端怎么解都不会再偏
+- `relTime()`：刚刚 / N 分钟前 / N 小时前（同一天）/ **昨天 HH:MM** / N 天前（<7）/ MM-DD
+
+接线：`inbox.mjs` 的 `AGE_MIN` 与条目 `at` 都走它，并新增 `when` 字段；
+`client.js` 的 `Time` 优先渲染 `when`（同 `ago()` 留作兜底）。
+
+**验证**：
+```
+inbox --at-only → when: 34 分钟前 | at: 2026-11-05T10:26:24.000Z   （原来显示 9 小时前）
+tests/reltime.test.mjs 11 例：跨天/昨天/坏输入/未来时间/真实截图那条
+```
+
+**顺带核实**：`lib/duty.mjs` 的 `ageHoursOf()` 本来就会补 `Z`，48 小时时效窗一直是对的，没动。
+
+**验收**：`check.mjs` PASS 86 文件 / 29 测试 / 384 例。
+
+**生效**：`client.js` 刷新页面即可；`inbox.mjs` 由 CLI 子进程加载，下次开面板就是新的。**不用重启 DSH。**
+
+---
+
+## 24. 2026-11-05 夜：视图模型 + 动作账 + 自动现状页
+
+> 这一轮不加功能，只拆两个结构问题：界面逻辑不可测、出错没有现场。
+
+### 24.1 `lib/viewmodel.mjs`（新）
+
+把「一条收件箱记录 → 界面上那几个字」变成纯函数：
+
+```js
+inboxItemView('dm'|'at'|'own', item, { now })  // → { when, preview, notes, blocked, tone }
+inboxHeadline(inbox, now)                      // → { worth, text: '3 条值得回 · 2 分钟前' }
+```
+
+`lib/inbox.mjs` 在三个候选函数的返回处挂 `it.view`；`client.js` 改成
+`it.view ? it.view.preview : 旧逻辑`（**行数没有增加**，1938/1940 没变）。
+规则现在可以单测，也能给 CLI / 日报复用。
+
+### 24.2 `lib/runlog.mjs`（新）—— 动作账
+
+`~/.dsh/douyin-studio/runs.jsonl`，一行一个动作：`{at, kind, target, ok, stage, error, took}`。
+超过 2MB 轮转成 `.1`，坏行跳过，写失败返回 null（绝不因为记账把主流程搞挂）。
+
+接线三处：
+- `tools/dy.mjs` 的 `out()`：每条 CLI 的最终结果（覆盖全部命令）
+- `lib/sendlog.mjs`：真正发出去的那一步
+- `index.js` `tellOwner`：分享卡片 + 补一句话这个**组合动作**的整体结果
+
+> 和 ledger 的分工：ledger 是业务账（管去重、管额度），runs 是运维账（管排查）。
+> 以后"它到底做没做"不用再翻聊天记录。
+
+### 24.3 `tools/status.mjs`（新）—— 数字不再手抄
+
+`node tools/status.mjs` → 覆盖写 `docs/STATUS.md`：体量、`check --quick` 输出、
+行为自检结论、最近 60 条动作的成功/失败与分布。
+
+HANDOFF 第 1 节曾写「b21 / 1565 行 / 242 例」而代码是 b35 —— 这类漂移以后只会在 STATUS.md 出现，
+且它每次都是重新采样的。
+
+### 24.4 验证
+
+```
+node tools/check.mjs     → PASS  91 文件 / 31 测试文件 / 399 例 / 禁改区 7 个未变
+node tools/status.mjs    → docs/STATUS.md 已生成
+宿主（端口已从 51549 变 58337）
+  GET /api/douyin-studio/status → 200
+  GET /api/douyin-studio/inbox  → items[0].view.when = "48 分钟前"（真实数据）
+```
+
+**仍需重启**：`index.js` 的改动（tellOwner 动作账、uid 落盘）在宿主启动时加载。
+`lib/*` 与 `client.js` 都是按需/子进程加载，已生效。
+
+**已知非产品问题**：`tmp/preview` 沙盘页要求 `/vendor/react.js` 由外部服务器提供，
+临时起的静态服务没映射对，渲染检查没跑通 —— 与 `client.js` 本身无关（语法与真机接口均已验证）。
+
+---
+
+## 25. 2026-11-05 夜（二）：调度层重写 + 界面收口 + 结构债
+
+> 这一轮把 `docs/方案-调度与界面优化-2026-11-05.md` 的 A1–A5 / B1–B6，
+> 以及上一轮「项目意见」里的 P0/P1 结构项一起落实。版本号 b35 → **b36**。
+
+### 25.1 调度（A1–A5）
+
+| 文件 | 干什么 |
+|---|---|
+| `lib/scheduler.mjs`（新） | 窗口制 `scanWindows`（旧字段只读映射成单窗口）、按天稳定的 ±15% 抖动、≥45 分钟最小间隔、四档退避熔断、纯函数 `decide()` |
+| `lib/roundstate.mjs`（新） | `scan-state.json` / `rounds.jsonl` / `health.json` / `STOP` 的唯一写盘口 |
+| `lib/dashboard.mjs`（新） | 面板 / CLI / scanTick 共用的只读快照：`next` + `hero` + `log` + `funnel` |
+| `index.js` scanTick | 额度为 0 跳过且不消耗轮次、失败退避、连败 6 次停到次日、每轮写台账、跳过原因去重 |
+| `tools/dy.mjs schedule` | `--pause on\|off`；CLI 与面板读数同源，宿主没重启也能验 |
+
+**确定性抖动是硬要求**：tick 每 5 分钟跑一次，若每次重算点位会飘，
+就会出现「这一轮永远等不到」或「同一轮刷两次」。随机源是 `hash(day+index)`。
+
+真实数据实测：`09:12 / 13:13 / 17:12`，`±36 分钟`，`done=3`，`quotaLeft=37`。
+暂停往返：`--pause on` → `action=pause`；`--pause off` → 恢复，STOP 文件已删。
+
+### 25.2 体量债：CSS 真源
+
+`client.js` 曾卡在 1938/1940 行，其中 **352 行是 CSS 原文**。
+现在 `assets/panel.css` 是可读源文件，`tools/build-client.mjs` 压成一行写回
+`client.js`；`check.mjs` 第 ⑦ 条比对两者，分叉就红。**生成物仍是单文件**，
+宿主不用改加载方式。行数 1937 → 1711。
+
+### 25.3 界面（B1–B6 + 键盘 / 响应式）
+
+- 看板三数：粉丝/作品/获赞 → **待回 / 额度剩 / 上一条回评成败**，22px·660·tabular-nums，可点跳转
+- 收件箱改**表格式一行**（谁 / 说了什么 / 判定 / 时间），行高 30，一屏扫 10+ 条
+- 新增**值班日志**卡：动作账 + 轮次账 + 业务账合成时间线，跳过原因可见；带三段漏斗
+- 头部加「下一轮 15:32（±N 分钟）· 暂停刷」，暂停写 `STOP`
+- 收件箱空态给两个动作；时间设置按「静音 / 低峰一 / 低峰二」分卡片小标题
+- `⌘/Ctrl+K` 命令面板、`1–4` 切区、`r` 刷新、`/` 打开面板；输入框里不抢键
+- `@media (max-width:720px)`：分段控件横向滚动 + 两端渐隐、表格收一列、看板折行
+
+**降级**：宿主没重启时 `/schedule` 还是 404，面板从 `/budget`+角标+账本拼一份
+只读快照，看板不空白、暂停按钮不出现（避免点了没反应）。
+
+### 25.4 结构（上一轮项目意见）
+
+| 项 | 落地 |
+|---|---|
+| P0 视图模型 | `lib/viewmodel.mjs` 扩出 `heroView` / `dutyLogView` / `funnelView`，前端只画 |
+| P0 动作账 | `lib/runlog.mjs` 已有，接到 `/runs`、`/schedule.log` |
+| P0 数字自动 | `tools/status.mjs` 生成 `docs/STATUS.md` |
+| P1 类型边界 | `jsconfig.json`（checkJs）+ `tools/typecheck.mjs`；本机无 tsc，验收先强制 12 个纯模块 / 68 个导出都有 JSDoc |
+| P1 回放测试 | `tests/fixtures/douyin-sample.json` + `tests/replay.test.mjs`（5 例），钉真实字段形状 |
+| P1 发布链 | `lib/publish-rules.mjs` + `tools/rules-drift.mjs`；**先检测不改禁改区**，两条链都是视频 30 / 图文 20 |
+| P2 单写者 | `lib/store.mjs` 按文件串行 read-modify-write；scanTick 的跨 await 写入全改走它，12 路并发自增测试证明不丢 |
+| 预览验证 | `tools/preview.mjs` + `tools/preview-check.mjs`，真实浏览器渲染四视图 + 420px 窄屏 |
+
+### 25.5 验收
+
+```
+node tools/check.mjs            → PASS  106 文件 / 35 测试文件 / 438 例
+                                    client.js 1711/1940 · 禁改区 7 个哈希未变
+                                    样式真源 / 类型契约 / 发布规则 全绿
+node tools/selfcheck.mjs        → ✓ 通过（1 warn：今天 1 条回复没记作者 uid，历史遗留）
+node tools/dy.mjs schedule      → 真实数据：点位/抖动/额度/漏斗/日志都读得出来
+preview-check（4 视图 + 420px） → ok=true，reply 3 行表格、today 3 条日志、b36
+降级路径（noschedule=1）        → ok=true，看板仍有数、按钮不出现
+```
+
+### 25.6 仍需重启 / 未做
+
+- **重启 DSH 才有新路由** `/schedule`、`/schedule/pause`、`/runs`。
+  CLI `node tools/dy.mjs schedule` 现在就能跑，验证不依赖重启。
+- `lib/publish.mjs` 在禁改区，没改成 import 共享规则 —— 目前是「分叉报警」，
+  等下次真要改发布行为时一起切。
+- 多账号参数化、`api.mjs` 拆分、点赞/收藏写接口、19 条历史漏账补记：
+  都属新增写行为或大范围重构，这轮刻意没碰。
+
+### 25.7 同夜补丁：设置页「两个不同颜色面板」其实是卡片背景中途结束
+
+**现象**（用户截图）：设置 → 时间，卡片底边横穿表单，
+「低峰二」及后面的字段落在另一块更暗的底色上，像被第二个面板包住/遮挡。
+
+**实测**（真实浏览器量盒子）：`[data-dys-view]` 高 387px，
+`[data-dys-view] > *:only-child{min-height:100%}` 让唯一的卡片也被拉伸/锁在 387px，
+但表单内容一直排到 882px —— **卡片背景在第 387px 结束，最后 216px 内容画到容器底色上**。
+
+**修**（只改一条 CSS，未动任何 JS / 数据 / 交互）：
+`assets/panel.css` 的 only-child 规则加 `align-self:start`，让卡片按内容自然长高，
+滚动交给 `[data-dys-view]` 的 `overflow:auto`。改完经 `tools/build-client.mjs` 重建。
+
+**验证**：
+```
+修复前  cardH=387  lastFieldBeyondCard=+217  （溢出）
+修复后  cardH=653  lastFieldBeyondCard=-50   （全在卡内，可滚动）
+短分组（内容/说话）修复前后都是 268px，未受影响
+tools/preview-check.mjs 新增 enclosure 断言：最后一个字段必须落在卡片内
+```

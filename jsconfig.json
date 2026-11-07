@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": false,
+    "skipLibCheck": true,
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "lib/publish-rules.mjs",
+    "lib/store.mjs",
+    "lib/scheduler.mjs",
+    "lib/schedule.mjs",
+    "lib/reltime.mjs",
+    "lib/roundstate.mjs",
+    "lib/runlog.mjs",
+    "lib/panelcss.mjs",
+    "lib/viewmodel.mjs",
+    "lib/dashboard.mjs",
+    "lib/selfcheck.mjs",
+    "lib/policy.mjs"
+  ],
+  "exclude": [
+    "node_modules",
+    "tmp",
+    "client.js",
+    "index.js"
+  ]
+}

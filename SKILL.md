@@ -2,6 +2,10 @@
 
 一套抖音操作：看账号、看作品、看评论、回评、发图文/视频、删自己发的。
 
+> **操作守则**：开工前读一次 `prompts/operate.md`。三条硬规矩（首跑必 dry、
+> `declare` 必填、`stop` 就是停手）比任何工具描述都优先；被 `killed` / `first-run` /
+> `declare` 挡回来时，照守则处理，不要换参数重试。
+
 ## 什么时候用哪个
 
 | 想做 | 用 |
@@ -9,7 +13,7 @@
 | **该回什么**（私信 / @我 / 自己评论区，带理由） | `douyin_studio_inbox`（先看这张表，再决定回哪条） |
 | **今天各通道还剩几条** | `douyin_studio_budget` |
 | 我是谁、今天还能回几条 | `douyin_studio_status` |
-| 我有啥作品、数据怎么样 | `douyin_studio_works`（单条精确数据用 `_detail`） |
+| 我有啥作品、数据怎么样 | `douyin_studio_works`（单条精确数据 + 文案原文用 `douyin_studio_detail`） |
 | 我赞过什么 | `douyin_studio_likes` |
 | 谁 @ 我 / 谁回复了我的评论 | `douyin_studio_notices` |
 | 私信：看会话、看聊天记录（只读） | `douyin_studio_dm` |
@@ -21,9 +25,16 @@
 | 私信：把一条视频当卡片发过去 | `douyin_studio_share`（带 `confirm: true`，先 `dry: true` 看目标） |
 | 这条视频下面谁说了什么（找靶子） | `douyin_studio_comments` |
 | 回一条评论 | `douyin_studio_reply` |
+| 某条评论底下有谁回了什么（楼中楼） | `douyin_studio_replies`（回楼中楼：`cid` 是对方那条，`root` 是楼根） |
+| 在别人视频的评论区 @ 某人 | `douyin_studio_comment_at`（**写操作**，要 `uid` + `confirm: true`；先 `dry: true` 校验） |
+| 刷一轮视频，挑一条发给我 | `douyin_studio_digest`（想先看挑中哪条就 `dry: true`） |
+| **出血了先停手**（全局停损总闸） | `douyin_studio_kill`（`action: "on"` 停 / `"off"` 解除 / `"status"` 只看） |
+| 想让它在窗口里自己发（默认关） | `douyin_studio_unattended`（`status` 看窗口与额度；开也要过四道闸） |
+| 主动互动灰度：今天会碰谁 | `douyin_studio_engage`（`action: "plan"` 只出清单；白名单为空一条都不碰） |
+| 昨晚那一轮为什么没跑 | `douyin_studio_jobs`（最近几条作业账，含被总闸挡下的） |
 | 发图文 / 视频 / 定时 / 存草稿 | `douyin_studio_publish` |
 | 删一条自己发的 | `douyin_studio_delete` |
-| 私信里的人都是谁 | douyin_studio_names（action=refresh 抄一次） |
+| 私信里的人都是谁 | `douyin_studio_names`（action=refresh 抄一次） |
 | 今天回过谁、为什么回 | `douyin_studio_ledger` |
 | 今天花了多少钱 | `douyin_studio_cost` |
 | 号涨没涨（粉丝/总赞/作品） | `douyin_studio_trend`（`action: "save"` 记今天一笔） |
@@ -59,9 +70,12 @@
 1. 图片用**绝对路径**（相对路径会把渲染进程挂死，踩过）
 2. 标题：图文 ≤20 字，视频 ≤30 字（代码里就是这个数，别按页面上写的 55 填）
 3. 想让人看到就给 `who: "public"`，自测一律 `who: "private"`，测完 `douyin_studio_delete`
-4. AI 图要带 `declare: "ai"`（平台要求，也是体面）
+4. AI 图要带 `declare: "ai"`（平台要求，也是体面）。**真发/存草稿时这条是必填**，
+   不填工具直接拒（以前是可以空着过去的，2026-11-05 起不行了）；真发还不许 `none`
 5. 定时 `at` 只能用「2 小时后 ~ 14 天内」，格式 `"2026-11-05 20:00"`
 6. 想留最后一下给自己：不给 `publish` 也不给 `draft`，它会摆好不点
+7. **第一次真发之前必须先跑一次 `dry: true`**：这台机器还没摆过一次，`publish: true`
+   会被挡回来。跑通一次 dry 就永久解锁（状态在 `$DOUYIN_STUDIO_HOME/first-run.json`）
 
 ## 出错怎么读
 
