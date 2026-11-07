@@ -1096,7 +1096,12 @@ export function apply(ctx, config) {
 		}))
 		try {
 			/* 一轮刷完 = 一个作业：失败退避重试两次，每一步之前都看总闸（lib/jobs.mjs）。 */
-			const r = await runJob('scan-round', startPicksCollect, { tries: 2 })
+			const r = await runJob('scan-round', startPicksCollect, {
+		tries: 2,
+		/* 预检只量浏览器这一跳：scan-round 有过 1.2s / 63.6s 的巨大抖动，
+		 * 没有 pre 这个数就分不清是逻辑慢还是 CDP 冷启动/被系统挂起。 */
+		preflight: async () => { const { listTabs } = await import('./lib/cdp.mjs'); await listTabs() },
+	})
 			const ok = Boolean(r && r.ok !== false && !r.error)
 			const err = ok ? '' : String((r && (r.error || r.stage)) || '没拿到结果')
 			const failures = ok ? 0 : priorFailures + 1

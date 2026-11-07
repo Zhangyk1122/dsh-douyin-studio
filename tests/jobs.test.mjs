@@ -49,3 +49,30 @@ test('总闸开着：一步都不跑', async () => {
 	setKill(false)
 	assert.ok(jobsFile().endsWith('jobs.jsonl'))
 })
+
+/* ── 2026-11-07：预检耗时（scan-round 的 1.2s / 63.6s 抖动要靠它归因）───────── */
+
+test('preflight：耗时写进 pre，作业本身不被打扰', async () => {
+	const v = await runJob('demo-pre', async () => ({ ok: true }), { tries: 1, preflight: async () => { await new Promise((r) => setTimeout(r, 30)) } })
+	assert.deepEqual(v, { ok: true })
+	const row = readJobs(5).filter((r) => r.name === 'demo-pre').pop()
+	assert.equal(row.ok, true)
+	assert.equal(typeof row.pre, 'number')
+	assert.ok(row.pre >= 25, 'pre 应该量到预检耗时，实际 ' + row.pre)
+})
+
+test('preflight 抛错：作业照跑，pre 记 -1（不把预检当业务失败）', async () => {
+	let ran = false
+	const v = await runJob('demo-pre-bad', async () => { ran = true; return 'ok' }, { tries: 1, preflight: async () => { throw new Error('浏览器没起来') } })
+	assert.equal(v, 'ok')
+	assert.equal(ran, true)
+	const row = readJobs(5).filter((r) => r.name === 'demo-pre-bad').pop()
+	assert.equal(row.pre, -1)
+	assert.equal(row.ok, true)
+})
+
+test('没给 preflight：账里不出现 pre 字段（旧读法不受影响）', async () => {
+	await runJob('demo-no-pre', async () => 'ok', { tries: 1 })
+	const row = readJobs(5).filter((r) => r.name === 'demo-no-pre').pop()
+	assert.equal('pre' in row, false)
+})

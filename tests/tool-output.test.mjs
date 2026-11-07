@@ -15,6 +15,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { registerExtraTools } from '../lib/tools-extra.mjs'
+import { registerTools } from '../lib/tools.mjs'
 
 /** 和 index.js:178 保持一致的输出定义（schema 是 object，不是 string） */
 const textOutput = {
@@ -61,6 +62,37 @@ test('jobs 的载荷形状稳定（ok / killed / file／jobs 数组）', async (
 	assert.equal(typeof out.file, 'string')
 	assert.ok(Array.isArray(out.jobs))
 	assert.ok(out.jobs.length <= 3, 'count 上限没生效')
+})
+
+/* ── 全量：36 条工具都得挂同一份对象 schema ─────────────────────────────── */
+
+/** 真注册器 + 假宿主：只为了把 spec 截下来，不执行任何写操作 */
+function captureAllSpecs() {
+	const specs = []
+	const ctx = { tools: { register: (spec) => { specs.push(spec); return spec } } }
+	const defineTool = (spec) => spec
+	const dummy = async () => ({ ok: true })
+	registerTools({ ctx, defineTool, textOutput, run: dummy, S: {}, DUTY: {}, WATCH: {} })
+	registerExtraTools({ ctx, defineTool, textOutput })
+	return specs
+}
+
+test('全部工具（36 条）都声明了对象型 output，且名字带 douyin_studio_ 前缀', () => {
+	const specs = captureAllSpecs()
+	assert.equal(specs.length, 36, '工具数量变了：SKILL.md / 面板 / 校验都要跟着改')
+	for (const s of specs) {
+		assert.match(s.name, /^douyin_studio_[a-z_]+$/, `名字不合规：${s.name}`)
+		assert.equal(s.output, textOutput, `${s.name} 没有用 textOutput`)
+		assert.equal(s.output.schema.type, 'object', `${s.name} 的 schema 不是 object`)
+		assert.ok(String(s.description || '').length > 10, `${s.name} 缺描述（模型看不到它是干什么的）`)
+		assert.equal(typeof s.parameters, 'object', `${s.name} 缺 parameters`)
+	}
+})
+
+test('没有重复的工具名（注册器不会静默覆盖）', () => {
+	const specs = captureAllSpecs()
+	const names = specs.map((s) => s.name)
+	assert.equal(new Set(names).size, names.length, '有重名工具：' + names.filter((n, i) => names.indexOf(n) !== i).join(', '))
 })
 
 test('无人值守 / 互动灰度：默认只读，不因为「看一眼」就改设置', async () => {
