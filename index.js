@@ -385,7 +385,7 @@ export function apply(ctx, config) {
 	}
 
 	let picksTask = null
-	const startPicksCollect = () => {
+	const startPicksCollect = (mark = () => {}) => {
 		if (picksTask) return picksTask
 		picksTask = (async () => {
 			try {
@@ -400,6 +400,9 @@ export function apply(ctx, config) {
 					'--limit', String(n),
 					'--mark-seen',
 				], { timeout: 300000 })
+				/* 阶段计时（0.4.5）：feed 这一跳把「浏览器 + 滚动 + 网络」都包在一起了，
+				 * 先量出来是哪一段贵；要再细分得动 CLI 内部，那是下一步的事。 */
+				mark('feed')
 				if (!r || !r.ok) return r
 				const { toCandidate, judge, mergeItems, load, save } = await import('./lib/picks.mjs')
 				const taste = await tasteNow()
@@ -417,7 +420,9 @@ export function apply(ctx, config) {
 					if (!j.ok) continue
 					cand.push({ ...c, score: j.score, why: j.why })
 				}
+				mark('judge')
 				save(mergeItems(load().items, cand))
+				mark('save')
 				/* 刷完一轮，挑最好的那条「叫一下主人」——分享卡片 或 评论区 @。
 				 * 叫不叫、叫几次、用哪一档，全看设置里的通知预算；不许绕过它。 */
 				let told = null

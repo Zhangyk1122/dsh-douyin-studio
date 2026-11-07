@@ -12,7 +12,7 @@ import { join } from 'node:path'
 
 process.env.DOUYIN_STUDIO_HOME = mkdtempSync(join(tmpdir(), 'dys-jobs-'))
 
-const { runJob, readJobs, jobsFile } = await import('../lib/jobs.mjs')
+const { runJob, readJobs, jobsFile, jobsFiles, appendJob } = await import('../lib/jobs.mjs')
 const { setKill } = await import('../lib/killswitch.mjs')
 
 test('成功：原样返回，并落一条账', async () => {
@@ -47,7 +47,9 @@ test('总闸开着：一步都不跑', async () => {
 	assert.equal(ran, false)
 	assert.equal(v.stage, 'killswitch')
 	setKill(false)
-	assert.ok(jobsFile().endsWith('jobs.jsonl'))
+	/* 0.4.5 起账本按月落盘：jobs-YYYY-MM.jsonl */
+	assert.match(jobsFile(), /jobs-\d{4}-\d{2}\.jsonl$/)
+	assert.ok(jobsFiles().length >= 2, '当月 + 历史，至少两个候选文件')
 })
 
 /* ── 2026-11-07：预检耗时（scan-round 的 1.2s / 63.6s 抖动要靠它归因）───────── */
@@ -75,4 +77,38 @@ test('没给 preflight：账里不出现 pre 字段（旧读法不受影响）',
 	await runJob('demo-no-pre', async () => 'ok', { tries: 1 })
 	const row = readJobs(5).filter((r) => r.name === 'demo-no-pre').pop()
 	assert.equal('pre' in row, false)
+})
+
+/* ── 0.4.5：阶段计时（phases）/ 按月轮转 / 老账本兼容 ─────────────────────── */
+
+test('mark()：每按一次记一段，phases 相加≈took', async () => {
+    const v = await runJob('demo-phase', async (mark) => {
+        await new Promise((r) => setTimeout(r, 20)); mark('feed')
+        await new Promise((r) => setTimeout(r, 10)); mark('judge')
+        return 'ok'
+    }, { tries: 1 })
+    assert.equal(v, 'ok')
+    const row = readJobs(5).filter((r) => r.name === 'demo-phase').pop()
+    assert.equal(row.ok, true)
+    assert.ok(row.phases && typeof row.phases === 'object', 'phases 应该落账')
+    assert.ok(row.phases.feed >= 15, 'feed 段应量到，实际 ' + row.phases.feed)
+    assert.ok(row.phases.judge >= 5, 'judge 段应量到，实际 ' + row.phases.judge)
+    assert.ok(row.phases.feed + row.phases.judge <= row.took, '分段不该超过总耗时')
+})
+
+test('不调 mark：账里不出现 phases 字段（老作业的账行长一个样）', async () => {
+    await runJob('demo-no-phase', async () => 'ok', { tries: 1 })
+    const row = readJobs(5).filter((r) => r.name === 'demo-no-phase').pop()
+    assert.equal('phases' in row, false)
+})
+
+test('按月轮转：当月账本 + 老的 jobs.jsonl 一起读得到', async () => {
+    const { appendFileSync } = await import('node:fs')
+    appendFileSync(join(process.env.DOUYIN_STUDIO_HOME, 'jobs.jsonl'), JSON.stringify({ at: '2026-10-31T00:00:00.000Z', name: 'legacy-row', ok: true, took: 5 }) + '\n', 'utf8')
+    for (let i = 0; i < 8; i++) appendJob({ name: 'many-' + i, ok: true, took: 100 + i })
+    const rows = readJobs(50)
+    assert.ok(rows.some((r) => r.name === 'legacy-row'), '老 jobs.jsonl 仍要能读到')
+    const tail = readJobs(3)
+    assert.equal(tail.length, 3)
+    assert.equal(tail[2].name, 'many-7', '新的在后')
 })

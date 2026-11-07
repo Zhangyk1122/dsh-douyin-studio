@@ -1,5 +1,47 @@
 # CHANGES
 
+## 0.4.5 — 2026-11-07（可观测 + 定时对齐；不新增能力）
+
+这一版全部来自实弹里"看得见但查不动"的四件事：54s 的 scan 花在哪、11-04 起连挂 11 次的
+日报为什么只剩一条记录、22:30 的日报为什么 22:49 才发、同时开 4 个抖音页时为什么"点得着却打不开"。
+一条行为都没改，改的是"以后再出这类问题，能不能一次问清楚"。
+
+### 加
+
+- `lib/jobs.mjs`：`runJob(name, fn)` 的 `fn` 现在会收到一个 `mark(名字)`。每按一次记一段耗时，
+  账行落成 `phases: { feed: 41000, judge: 900 }`（每段是"距上一个 mark"的毫秒）。
+  老作业函数不接参数照跑；没调 `mark` 的作业账行里不会多出这个字段。
+- `lib/jobs.mjs`：账本按月轮转 —— `jobs-YYYY-MM.jsonl`（当月）+ 往前读 2 个月；
+  0.4.4 之前的 `jobs.jsonl` **仍然会被读到**，历史不用搬家。
+- `lib/jobs.mjs`：`readJobs(n)` 改尾部读（最多 256KB / 一次），不再整份读进来。
+- `index.js`：`startPicksCollect(mark)` 埋三段 —— `feed`（浏览器 + 滚动 + 网络，这一跳最贵）、
+  `judge`（打分）、`save`（写库）。
+- `lib/autopilot.mjs`：新增 `autopilot-log.jsonl`。state 里的 `log` 仍然只留 20 条给面板看，
+  但每一行同时追加进这个文件，永不覆盖 —— 11-04 到 11-07 那 11 次 report 失败就是被 20 条挤掉的。
+- `lib/autopilot.mjs`：`reportAt` 单独对表。`start()` 里多一个 `armDaily()`：按 `reportAt`
+  排一个 `setTimeout`（跨零点自动 +24h），到点就跑；30 分钟的 tick 保留，只当"睡醒补跑"。
+  新增纯函数 `clockMinutes()` / `msToNextClock()`（读不出来返回 null，不猜时间）。
+- `lib/chrome.mjs`：`openPage({ want })` 与 `matchTab(tabs, host, want)`。
+  传了 `want`（如 `'/chat'`）就先按 pathname 精确命中、再按前缀命中，命中不到**返回 null 去开新页**，
+  不再退回"同域随便一张"。不传 `want` = 老行为，一个字节没变。
+- `lib/im-report.mjs`：发日报改 `openPage({ url: CHAT_URL, navigate: true, want: '/chat' })`。
+- `lib/roundstate.mjs`：`readHealth()` 多返回两块**派生**字段（读时算，不写盘）：
+  `last: {scan, report, publish}` 最近一次成功的时间；`took: {n, p50, p95}`（样本 < 5 不出现）。
+- 测试 +20 例：`tests/jobs.test.mjs` +3（phases 落账 / 无 mark 不写字段 / 跨月与老账本一起读）、
+  新增 `tests/chrome-tab.test.mjs`（5 例：老行为不变、精确命中、命中不到返 null、前缀、坏 url）、
+  新增 `tests/autopilot-clock.test.mjs`（7 例：对表纯函数 + 明细账追加）、
+  新增 `tests/health-extra.test.mjs`（5 例：last/took 派生 + 不写盘）。
+- `docs/STATUS.md`：重新生成（client.js 1740、index.js 1151）。
+
+### 没做（有意）
+
+- `lib/api.mjs`、`lib/budget.mjs`、`publish*` 三件套：一个字节没动（禁改区）。
+- `picks.json` 48KB 全量读：先只改 `jobs`，picks 的结构动到面板读法，单独一批再议。
+- `settings.json` 单写者：**暂缓**。查了实现，`writeSettings()` 是 `readSettings → normalize → atomicWriteJson`
+  全同步、单进程内无 await 断点，同进程的并发写不可能发生；只有两个插件实例共用同一个
+  `DOUYIN_STUDIO_HOME` 才会撞（那是 11-07 修掉的双实例问题）。真再现再加 `rev`。
+- 反检测 / 浏览器启动参数：登录风险，照旧不碰。
+
 ## 0.4.4 — 2026-11-07（只加观察项，不改行为）
 
 这一版的目的是**让下一次改动有证据**：scan-round 出现过 1.2s 和 63.6s 两种耗时，
