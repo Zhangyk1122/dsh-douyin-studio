@@ -1,5 +1,32 @@
 # CHANGES
 
+## 0.4.8 — 2026-11-08（可观测性收口：定点可查、明细账轮转、派生块读盘缓存）
+
+只做「不改接口、不改筛选语义」的三件事。`/inbox/count` 结构、`worth` 的 72 小时线、
+面板默认停在哪个区 —— 这三样会动语义，**只出方案，没动代码**。
+
+### 改
+
+- `lib/autopilot.mjs`：`status()` 多一个 `nextReportAt`（ISO 或 `null`），来源是新增的模块级
+  `dailyAt`（`armDaily()` 里算 `Date.now() + wait`，`stop()` 清空）。
+  以前"下一次日报几点"只活在 `setTimeout` 里，外面问不到；`rearm()` 成没成只能靠"看明天发没发"。
+  只增字段，老调用方读不到也不会坏。
+- `lib/autopilot.mjs`：新增 `rotateLog(file, maxBytes)` + `LOG_MAX_BYTES`（5 MB），
+  `appendLogLine()` 写之前先过一遍：到顶就把账挪成 `<file>.1`（覆盖旧的一代，不攒 `.2/.3`）。
+  0.4.5 的 `autopilot-log.jsonl` 是"永不覆盖"账，永不轮转迟早长成没人敢读的文件。
+- `lib/roundstate.mjs`：`healthExtra()` 加 1 秒读盘缓存（`HEALTH_MEMO_MS`），
+  `readHealth({ memoMs })` 可绕开（默认 1000，传 0 = 直读）；新增 `dropHealthMemo()`，
+  `writeHealth()` / `appendRound()` 写完主动清缓存。
+  面板 5 秒轮询一次 `/schedule`，一次要读 jobs（最多 3 × 256 KB）+ `autopilot-state.json`。
+- `tests/health-extra.test.mjs`：改成"要立刻读到刚写的账就传 `{memoMs:0}`"，另加 2 例
+  —— 同一秒内账本变了仍给缓存、绕开/清缓存后给新值；写 health 会主动清缓存。
+- `tests/autopilot-clock.test.mjs`：+2 例 —— `status().nextReportAt`（停着 null、跑起来是本地 22:30 的 ISO）；
+  `rotateLog`（没到顶不转、到顶转 `.1`、再超不攒 `.2`）。
+
+### 没动（要改语义，先出方案）
+
+- `/inbox/count` 返回结构、`worth` 的 72 小时线、面板默认 tab：见交付说明的「待确认」列表。
+
 ## 0.4.7 — 2026-11-08（收三个尾巴：感想、定点重排、收件箱口径）
 
 三件都是 11-07 验收时挂账的东西，不改功能、不加能力。

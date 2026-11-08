@@ -6,7 +6,7 @@
  */
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -81,5 +81,41 @@ test('rearm：在跑时按 reportAt 重排，返回新的等待时长', async ()
 		const r2 = A.rearm()
 		assert.equal(r2.daily.at, 7)
 	} finally { A.stop() }
+})
+
+test('status().nextReportAt：只增字段，没排上是 null、排上了是 ISO', async () => {
+	const A = await import('../lib/autopilot.mjs')
+	const { writeSettings } = await import('../lib/settings.mjs')
+	A.stop()
+	assert.equal(A.status().nextReportAt, null, '停着的时候没有下一次')
+	writeSettings({ reportAt: '22:30' })
+	A.start({ everyMin: 30, runCli: async () => ({ ok: true, results: [] }) })
+	try {
+		const iso = A.status().nextReportAt
+		assert.match(String(iso), /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+		const d = new Date(iso)
+		assert.equal(d.getHours() * 60 + d.getMinutes(), 22 * 60 + 30, '本地时间应该是 22:30')
+	} finally { A.stop() }
+	assert.equal(A.status().nextReportAt, null)
+})
+
+test('rotateLog：到顶转成 .1，只留一代，账不丢', async () => {
+	const A = await import('../lib/autopilot.mjs')
+	const file = join(process.env.DOUYIN_STUDIO_HOME, 'rot.log')
+	writeFileSync(file, 'a'.repeat(50) + '\n', 'utf8')
+	assert.equal(A.rotateLog(file, 1000).rotated, false, '没到顶不转')
+	writeFileSync(file, 'b'.repeat(80) + '\n', 'utf8')
+	const r = A.rotateLog(file, 1000)
+	assert.equal(r.rotated, false)
+	writeFileSync(file, 'c'.repeat(1200) + '\n', 'utf8')
+	const r2 = A.rotateLog(file, 1000)
+	assert.equal(r2.rotated, true)
+	assert.equal(r2.size, 1201)
+	assert.ok(existsSync(file + '.1'), '老的一代留在 .1')
+	assert.equal(existsSync(file), false, '转完原文件不在，下次 append 会新建')
+	/* 再超一次：.1 被覆盖，不会攒出 .2 / .3 */
+	writeFileSync(file, 'd'.repeat(1200) + '\n', 'utf8')
+	A.rotateLog(file, 1000)
+	assert.equal(existsSync(file + '.2'), false, '只留一代')
 })
 
