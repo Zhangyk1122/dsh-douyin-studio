@@ -1,5 +1,46 @@
 # CHANGES
 
+## 0.5.0 — 2026-11-09（时效口径统一：面板说 3 条、值班扫到 0 条，这件事不再可能）
+
+现象：`/schedule` 的 `hero.pending` 是 3，`/duty` 的 `last` 是 `scanned: 0, picked: 0`。
+看起来像「评论区没人说话」，实际上是两边用了两套时效：
+
+- `lib/inbox.mjs` 的 `ownComments` 按 **7 天**算 `worth`；
+- `lib/duty.mjs` 的 `collect` 按 `settings.replyFreshHours`（默认 **48 小时**）丢候选。
+
+### 改
+
+- `lib/inbox.mjs`：新增纯函数 `freshness(ageMin, freshHours)` —— 唯一的时效口径。
+  `ownComments({..., freshHours})` 用它判 `worth`；超时的不删，`worth:false` +
+  `blocked:['已经 N 小时没回了（时效 48 小时），不追了']`，列表里仍看得到。
+  `inbox()` 默认从 `settings.replyFreshHours` 取，返回值多一个 `freshHours` 供核对。
+- `lib/duty.mjs`：新增纯函数 `withinFresh(createDate, freshHours, now)`，`collect()` 改用它；
+  `ageHoursOf(v, now)` 现在接受 `now`（测试可控）。
+- `lib/duty.mjs`：`collect()` 多记三笔账 —— `seen`（实际看到多少条评论）、`skippedOld`
+  （被时效挡掉的）、`worksFailed`（作品评论读失败的）。以前读失败是静默 `continue`，
+  面板只看到 `scanned: 0`，分不清「没评论」和「没读到」。
+- `lib/duty.mjs`：`scanned` 语义改为「看到多少条」，新增 `fresh`（过关候选数）、
+  `skippedOld`、`worksFailed`，一起写进 `duty-state.json`（只增字段，老面板读不到也不坏）。
+- `tests/freshness.test.mjs`（新，6 例）：48 小时边界、`0/空/非法 = 不限`、
+  日期读不出来就放行、无时区标记的 UTC 不能按本地算、两侧同一口径。
+
+### 真机对照（2026-11-09 19:5x）
+
+```
+改前：/duty last = {scanned: 0, picked: 0}       /schedule hero.pending = 3
+改后：collect()   = {seen: 47, skippedOld: 45, candidates: 0, worksFailed: 0}
+      /inbox      = counts {dm:0, at:2, own:0}, freshHours 48
+```
+
+结论：评论区不是「没有评论」，是 47 条里 45 条已经过了 48 小时，剩下的是自己发的。
+以前这两个数字合在一起看不出区别，现在一眼能分清。
+
+### 没改
+
+- `atCandidates` 仍按 72 小时 / 7 天分级（`ageRank`），没并进 `replyFreshHours` ——
+  @我 和「我作品下的评论」是两种东西，合并要改语义。`(待补充：@我 是否也按 48 小时)`
+- 禁改区未动（7 个哈希复核一致）。
+
 ## 0.4.9 — 2026-11-09（工具返回类型：把 16 处字符串收回对象）
 
 起因：`douyin_studio_kill` / `douyin_studio_duty` 实测调用就报 `invalid output: "value" must be an object`。
