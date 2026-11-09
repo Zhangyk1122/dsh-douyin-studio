@@ -1,5 +1,28 @@
 # CHANGES
 
+## 0.4.9 — 2026-11-09（工具返回类型：把 16 处字符串收回对象）
+
+起因：`douyin_studio_kill` / `douyin_studio_duty` 实测调用就报 `invalid output: "value" must be an object`。
+这两条恰好是「看总闸状态」和「看值班在不在跑」的入口——出事的两个口子一起坏。
+
+### 改
+
+- `lib/tools.mjs`：16 处 `return JSON.stringify({...})` 改成直接返回对象（`kill` / `duty` / `watch` /
+  `publish` / `dm` / `queue` 等分支）。根因和 0.4.3 一样：这些分支绕过了本文件 `safe()`，
+  而宿主给的是 `type:'object'` 的 `textOutput`。0.4.3 只修了 `lib/tools-extra.mjs` 那三条，
+  这一批藏在同一个文件里没被发现。
+- `lib/tools.mjs:60`：总闸拦下写操作时返回 `killedReply(...)` 对象（原来 `JSON.stringify` 成字符串，
+  停损状态一下，所有写工具都变成 `invalid output`）。
+- `tests/tool-output.test.mjs`：+2 例 —— ①静态扫描 `lib/tools.mjs` / `lib/tools-extra.mjs`，
+  不许再出现 `return JSON.stringify(`；②用假宿主把 11 条只读分支（kill/duty/watch/status/budget/
+  jobs/unattended/engage/queue/ledger/trend）真跑一遍，断言返回值都是可 JSON 往返的普通对象。
+  假 `DUTY` / `WATCH` 只提供 status/start/stop，不真的起定时器。
+
+### 没改
+
+- 禁改区未动（`api` / `budget` / `im-send` / `publish*` 四个哈希复核一致）。
+- 值班 `scanned: 0` 的归因（`/duty` 的 `last` 停在 18:37）留到下一轮，不在这次改。
+
 ## 0.4.8 — 2026-11-08（可观测性收口：定点可查、明细账轮转、派生块读盘缓存）
 
 只做「不改接口、不改筛选语义」的三件事。`/inbox/count` 结构、`worth` 的 72 小时线、

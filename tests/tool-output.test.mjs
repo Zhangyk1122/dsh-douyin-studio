@@ -66,13 +66,25 @@ test('jobs 的载荷形状稳定（ok / killed / file／jobs 数组）', async (
 
 /* ── 全量：36 条工具都得挂同一份对象 schema ─────────────────────────────── */
 
+/** 假值班 / 假盯梢：status 要能被调用，start/stop 不真的起定时器 */
+const fakeDuty = () => ({
+	status: () => ({ ok: true, running: false, hourOk: true, last: null }),
+	start: () => ({ ok: true, running: true, everyMin: 30, autoReply: false }),
+	stop: () => ({ ok: true, running: false }),
+})
+const fakeWatch = () => ({
+	status: () => ({ ok: true, running: false }),
+	start: () => ({ ok: true, running: true }),
+	stop: () => ({ ok: true, running: false }),
+})
+
 /** 真注册器 + 假宿主：只为了把 spec 截下来，不执行任何写操作 */
 function captureAllSpecs() {
 	const specs = []
 	const ctx = { tools: { register: (spec) => { specs.push(spec); return spec } } }
 	const defineTool = (spec) => spec
 	const dummy = async () => ({ ok: true })
-	registerTools({ ctx, defineTool, textOutput, run: dummy, S: {}, DUTY: {}, WATCH: {} })
+	registerTools({ ctx, defineTool, textOutput, run: dummy, S: {}, DUTY: fakeDuty(), WATCH: fakeWatch() })
 	registerExtraTools({ ctx, defineTool, textOutput })
 	return specs
 }
@@ -93,6 +105,50 @@ test('没有重复的工具名（注册器不会静默覆盖）', () => {
 	const specs = captureAllSpecs()
 	const names = specs.map((s) => s.name)
 	assert.equal(new Set(names).size, names.length, '有重名工具：' + names.filter((n, i) => names.indexOf(n) !== i).join(', '))
+})
+
+/* ── 2026-11-09：同一个病在 lib/tools.mjs 里还藏着 16 处 ──────────────────
+ * `douyin_studio_kill` / `douyin_studio_duty` / `douyin_studio_watch` 的 status 分支
+ * 直接 `return JSON.stringify(...)`，绕过了 `safe()` —— 实测调用就报
+ * `invalid output: "value" must be an object`，而且坏的是「看状态」和「紧急刹车」两个入口。
+ * 静态扫描只钉一件事：工具注册文件里不许再出现 `return JSON.stringify(`。
+ */
+test('lib/tools.mjs 里不许再出现 `return JSON.stringify(`（会绕开 safe()）', async () => {
+	const { readFile } = await import('node:fs/promises')
+	for (const f of ['../lib/tools.mjs', '../lib/tools-extra.mjs']) {
+		const src = await readFile(new URL(f, import.meta.url), 'utf8')
+		const hits = src.split('\n')
+			.map((line, i) => ({ line: line.trim(), n: i + 1 }))
+			.filter((x) => /^\s*return JSON\.stringify\(/.test(x.line) || /return JSON\.stringify\(/.test(x.line) && !/JSON\.parse\(/.test(x.line))
+		assert.equal(hits.length, 0, `${f} 还有字符串返回：` + hits.map((h) => `L${h.n} ${h.line}`).join(' | '))
+	}
+})
+
+test('只读分支的 execute 一律返回对象（status / 看账本 / 看开关）', async () => {
+	const specs = captureAllSpecs()
+	const byName = new Map(specs.map((s) => [s.name, s]))
+	const cases = [
+		['douyin_studio_kill', { action: 'status' }],
+		['douyin_studio_duty', { action: 'status' }],
+		['douyin_studio_watch', { action: 'status' }],
+		['douyin_studio_status', {}],
+		['douyin_studio_budget', {}],
+		['douyin_studio_jobs', { count: 1 }],
+		['douyin_studio_unattended', {}],
+		['douyin_studio_engage', {}],
+		['douyin_studio_queue', { action: 'list' }],
+		['douyin_studio_ledger', {}],
+		['douyin_studio_trend', { action: 'show' }],
+	]
+	for (const [name, args] of cases) {
+		const s = byName.get(name)
+		assert.ok(s, `找不到工具 ${name}`)
+		const out = await s.execute(args)
+		assert.notEqual(typeof out, 'string', `${name} 返回了字符串（宿主会报 "value" must be an object）`)
+		assert.equal(typeof out, 'object', `${name} 的返回值不是对象：${typeof out}`)
+		assert.ok(out && !Array.isArray(out), `${name} 的返回值必须是普通对象`)
+		assert.doesNotThrow(() => JSON.parse(JSON.stringify(out)), `${name} 的返回值不能 JSON 往返`)
+	}
 })
 
 test('无人值守 / 互动灰度：默认只读，不因为「看一眼」就改设置', async () => {
