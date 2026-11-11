@@ -1,5 +1,41 @@
 # CHANGES
 
+## 0.5.3 — 2026-11-11（评论翻页 + 热评进提示 + 选题能走搜索 + 间隔不再固定）
+
+### 补记 0.5.1 / 0.5.2（当时只写了 commit message）
+
+- 0.5.1：`lib/tier.mjs` 的 `pickTier()` 让**每天第一轮先 @**（以前 `shareLeft > 0` 恒真，
+  `at` 永远轮不到）；`lib/proc.mjs` 只放行对象（CLI 回 `null` 时折成可解释的失败，不再 TypeError）；
+  `index.js` 里 `st.ownerSec` 全部改成 `st.ownerSecUid || st.ownerSec` ——
+  设置里叫 `ownerSecUid`，代码读 `ownerSec`，所以 sec_uid 从来没进过 CLI，只能靠昵称找会话，
+  于是整天「会话没打开（等不到输入框）」。账本同步改成「卡片发了、话没跟上 = `dm-card-only` + ok:false」。
+- 0.5.2：`lib/persona.mjs` 让抖音侧读 aurabot 的人格卡（`personas/xiaoxi.md`），
+  `personaLine()` 从 520 字摘要变成 4610 字符的本人；@ 的正文也交给她自己写（剥掉她自己加的 @）。
+
+### 改（本轮）
+
+- `lib/duty.mjs`：
+  - `collect({ pages = 2 })`：顺着 `api.comments` 的 `cursor / has_more` 翻页（该接口本来就支持，
+    以前只取第一页）；页间停 350–850ms；按 `cid` 去重；返回多 `pages / pageFetched`。
+  - 每条作品挑**热评前 3**（按 `digg`，排掉自己），挂到候选的 `hot` 上。
+  - `PROMPT` 增加「这条下面别人在说：」段（最多 3 条、带赞数），并说明「不是要你逐条回」。
+    以前只喂被回的那一句，所以她说不出评论区在聊什么 —— 不是她没看，是没给。
+- `lib/settings.mjs`：新增 `scanMode`（`'feed' | 'search'`，默认 `feed`）与 `scanKeywords`（逗号分隔）。
+- `index.js` `startPicksCollect`：
+  - 扫描间隔由固定秒改成 `scanGap × 0.7–1.3` 的随机值（固定 6 秒滚一整晚更像脚本）；
+  - `scanMode === 'search'` 且有词时走 `search --kw`，把 `list` 归一成 `items` 再进 picks，
+    `source` 记 `'search'`，关键词记进 `r.keyword`。
+
+### 验证
+
+- `node tools/check.mjs --quick` → PASS（146 文件解析、禁改区 7 个哈希未变、体量未超）。
+- 全量 `node --test tests\*.test.mjs` → **533 pass / 0 fail / 40 suites**（新增 `tests/collect-hot.test.mjs` 4 例）。
+- 真机 `collect({ worksN: 1, pages: 2, freshHours: 0 })` →
+  `{ ok:true, seen:8, cand:8, pages:2, pageFetched:1, worksFailed:0, hot:1 }`；
+  那条作品一共只有 8 条评论、`has_more:false`，所以只取到 1 页 —— 翻页逻辑是「有下一页才走」。
+
+---
+
 ## 0.5.0 — 2026-11-09（时效口径统一：面板说 3 条、值班扫到 0 条，这件事不再可能）
 
 现象：`/schedule` 的 `hero.pending` 是 3，`/duty` 的 `last` 是 `scanned: 0, picked: 0`。

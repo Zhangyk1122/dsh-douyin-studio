@@ -441,12 +441,25 @@ export function apply(ctx, config) {
 				/* 「每轮看几个」是用户视角的数字；feed 内部自己按条数反推翻几页，
 				 * 用户不用再理解 count / rounds 两层参数。每条之间歇 scanGap 秒。 */
 				const n = Math.min(Math.max(Number(st.scanPerRound) || 20, 1), 50)
-				const r = await run(['feed',
-					'--count', String(n),
-					'--gap', String(Number(st.scanGap) || 0),
-					'--limit', String(n),
-					'--mark-seen',
-				], { timeout: 300000 })
+				/* 每轮之间不用同一个秒数：固定 6 秒滚一整晚，比随机更像脚本。 */
+				const gap = Math.max(0, Math.round((Number(st.scanGap) || 0) * (0.7 + Math.random() * 0.6)))
+				/* 选题也能走搜索：feed 是算法给的，search 是关键词找的。
+				 * 默认还是 feed —— 换模式只影响「这一轮去哪找」，后面挑/打分/入库是同一套。 */
+				const kws = csv(st.scanKeywords)
+				let r = null
+				if (st.scanMode === 'search' && kws.length) {
+					const kw = kws[Math.floor(Math.random() * kws.length)]
+					const sr = await run(['search', '--kw', kw, '--count', String(n)], { timeout: 120000 })
+					/* search 回的是 list，feed 是 items：统一成 items 再进 picks。 */
+					r = sr && sr.ok ? { ...sr, source: 'search', keyword: kw, items: sr.list || [] } : sr
+				} else {
+					r = await run(['feed',
+						'--count', String(n),
+						'--gap', String(gap),
+						'--limit', String(n),
+						'--mark-seen',
+					], { timeout: 300000 })
+				}
 				/* 阶段计时（0.4.5）：feed 这一跳把「浏览器 + 滚动 + 网络」都包在一起了，
 				 * 先量出来是哪一段贵；要再细分得动 CLI 内部，那是下一步的事。 */
 				mark('feed')
