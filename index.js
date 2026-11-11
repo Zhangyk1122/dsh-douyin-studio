@@ -172,7 +172,15 @@ export function apply(ctx, config) {
 				error: '缺少 tools/dy.mjs', hint: '插件文件不全，重新装一次',
 			})
 		}
-		return execJson(CLI, args, { timeout, env: env() })
+		/* 不管子进程那边怎么收场，调用方拿到的**永远是对象**。
+		 * 2026-11-11：某两轮 scan 拿到 null，`r.ok` 直接抛 TypeError，
+		 * 真正的失败原因（stderr / 退出码）一个字都没留下 —— 只剩一行
+		 * `Cannot read properties of null (reading 'ok')`。 */
+		return execJson(CLI, args, { timeout, env: env() }).then((v) => (
+			v && typeof v === 'object'
+				? v
+				: { ok: false, category: 'LOCAL', error: 'CLI 没给出结果对象（' + (v === null ? 'null' : typeof v) + '）' }
+		))
 	}
 
 	const textOutput = {
@@ -311,15 +319,24 @@ export function apply(ctx, config) {
 		/* 还有额度的那条路才走；私信优先（更直接），私信满了才轮到评论区。 */
 		const shareLeft = Math.max(0, Number(st.sharePerDay) || 0) - used.share
 		const atLeft = Math.max(0, Number(st.atPerDay) || 0) - used.at
-		const tier = shareLeft > 0 ? 'dm' : (atLeft > 0 ? 'at' : '')
+		/* 2026-11-11：以前这里写死「私信优先」，而私信额度 2、每天只扫 2 轮，
+		 * shareLeft 永远 > 0 → @ 一次都发不出去（notify-state 的 at 长期为 0）。
+		 * 现在抽到 lib/tier.mjs：每天第一轮先 @，之后才走私信。 */
+		const { pickTier } = await import('./lib/tier.mjs')
+		const tier = pickTier({ shareLeft, atLeft, usedAt: used.at })
 		if (!tier) return { ok: true, sent: false, why: '今天的「叫我」额度用完了' }
 		const desc = String(top.desc || '').replace(/\s+/g, ' ').slice(0, 60)
+		/* 主人的 sec_uid：settings 里叫 `ownerSecUid`，这里以前读的是 `ownerSec` ——
+		 * 字段名对不上，于是它永远是空串：分享卡片不带 --sec，私信只按昵称找人，
+		 * 而昵称在会话列表里一旦滚出首屏就是「会话没打开（等不到输入框）」。
+		 * 11-09 之后那几次「私发好像没有」，一半是这个。两个都认，谁有值用谁。 */
+		const ownerSec = String(st.ownerSecUid || st.ownerSec || '').trim()
 		let r = null
 		let say = ''
 		let sayError = ''
 		if (tier === 'dm') {
 			r = await run(['share', '--aweme', top.aweme_id, '--to', st.ownerNick,
-				...(st.ownerSec ? ['--sec', st.ownerSec] : [])], { timeout: 180000 })
+				...(ownerSec ? ['--sec', ownerSec] : [])], { timeout: 180000 })
 			/* 光甩个卡片太干。补一句它自己看完想说的话 —— 用主人配的人设，20 字以内。 */
 			if (r && r.ok) {
 				try {
@@ -338,7 +355,7 @@ export function apply(ctx, config) {
 				 * 收件人只看见一个视频，不知道你想说什么 —— 这就是「发视频不发消息」。
 				 * 兜底不是瞎编：它就是这条的标题剪短，信息量够、也不会装成人说的话。 */
 				if (!say) say = '这条想给你看看：' + (desc.slice(0, 24) || '刚刷到的')
-				const dr = await run(['dm', '--to', st.ownerSec || st.ownerNick, '--text', say], { timeout: 180000 })
+				const dr = await run(['dm', '--to', ownerSec || st.ownerNick, '--text', say], { timeout: 180000 })
 				/* 带话没发出去 = 卡片旁边没字，等于白说。
 				 * 以前这里只 `say = ''`，失败原因随着变量一起消失 —— 用户只看到"视频没带字"，
 				 * 系统里查不出为什么。现在：① 只在**确认没发出去**的错上换目标重试一次；
@@ -346,7 +363,7 @@ export function apply(ctx, config) {
 				if (!(dr && dr.ok)) {
 					sayError = String((dr && (dr.error || dr.why)) || '未知原因')
 					const preSend = /没打开|没有「|找不到|反查不到|正文是空/.test(sayError)
-					const alt = st.ownerSec ? st.ownerNick : st.ownerSec
+					const alt = ownerSec ? st.ownerNick : ownerSec
 					if (preSend && alt) {
 						const dr2 = await run(['dm', '--to', alt, '--text', say], { timeout: 180000 })
 						if (dr2 && dr2.ok) { sayError = '' } else { sayError += ' / 换目标也失败：' + String((dr2 && (dr2.error || dr2.why)) || '未知') }
@@ -359,7 +376,7 @@ export function apply(ctx, config) {
 			 * 于是每一次都在参数校验那一步 die 掉了 —— 评论区 @ 从来没真正发出去过。 */
 			const atNick = String(st.ownerNick || '').trim()
 			const atUid = String(st.ownerUid || '').trim()
-			const atSec = String(st.ownerSec || '').trim()
+			const atSec = String(ownerSec).trim()
 			if (!atNick || !atUid || !atSec) {
 				return {
 					ok: false, sent: false, tier: 'at',
@@ -371,11 +388,18 @@ export function apply(ctx, config) {
 				'--text', '这条我觉得你会喜欢：' + (desc.slice(0, 24) || '刷到的一个')], { timeout: 180000 })
 		}
 		const sent = Boolean(r && r.ok)
+		/* 「发出去了」和「他真的收到了」不是一回事：
+		 * 分享卡片成功、跟着的那句话失败时，收件人只看见一个视频，不知道你想说什么。
+		 * 以前账上照样 ok:true —— 2026-11-10 那条 `ok:true stage dm error:"会话列表里没有「辰辰辰chen」"`
+		 * 就是这么来的，用户看到的是「私发好像没有」，系统里全绿。
+		 * 现在：卡片发了但话没跟上，记 `dm-card-only`，并且 ok:false。 */
+		const delivered = sent && !(tier === 'dm' && sayError)
+		const stage = delivered ? tier : (sent ? 'dm-card-only' : tier)
 		/* 顶层动作账：CLI 自己会记一条，但"分享卡片 + 补一句话"是一个组合动作，
 		 * 只有这里知道它整体成没成、补的话有没有发出去。 */
 		try {
 			const { logRun } = await import('./lib/runlog.mjs')
-			logRun({ kind: 'tellOwner', target: top.aweme_id, ok: sent, stage: tier, error: sayError || String((r && r.error) || '') })
+			logRun({ kind: 'tellOwner', target: top.aweme_id, ok: delivered, stage, error: sayError || String((r && r.error) || '') })
 		} catch { /* 记账失败不影响主流程 */ }
 		if (sent) {
 			const next = { day: today, share: used.share + (tier === 'dm' ? 1 : 0), at: used.at + (tier === 'at' ? 1 : 0), say, sayError,
@@ -384,8 +408,8 @@ export function apply(ctx, config) {
 				sent: [...already, String(top.aweme_id)].slice(-20) }
 			atomicWriteJson(file, next)
 		}
-		return { ok: true, sent, tier, aweme: top.aweme_id, say,
-			why: sent ? '' : ((r && (r.error || r.stage)) || '发失败了') }
+		return { ok: delivered, sent, tier: stage, aweme: top.aweme_id, say,
+			why: delivered ? '' : (sayError || ((r && (r.error || r.stage)) || '发失败了')) }
 	}
 
 	let picksTask = null
@@ -407,7 +431,14 @@ export function apply(ctx, config) {
 				/* 阶段计时（0.4.5）：feed 这一跳把「浏览器 + 滚动 + 网络」都包在一起了，
 				 * 先量出来是哪一段贵；要再细分得动 CLI 内部，那是下一步的事。 */
 				mark('feed')
-				if (!r || !r.ok) return r
+				/* 失败也要是「对象」。以前直接 `return r`：r 可能是 null（CLI 只回 null /
+				 * 解析失败），调用方 `r.ok` 就把 TypeError 抛出去，真实原因全丢。
+				 * 现在把 error + stderr 尾巴一起带上去，rounds.jsonl / jobs 里能看到人话。 */
+				if (!r || !r.ok) {
+					const err = String((r && (r.error || r.stage)) || '没拿到结果')
+					const tail = String((r && r.stderr) || '').replace(/\s+/g, ' ').trim().slice(-200)
+					return { ok: false, stage: 'feed', error: tail ? err + ' | stderr: ' + tail : err }
+				}
 				const { toCandidate, judge, mergeItems, load, save } = await import('./lib/picks.mjs')
 				const taste = await tasteNow()
 				const ctx = {

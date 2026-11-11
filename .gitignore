@@ -24,3 +24,7 @@ Thumbs.db
 # 杩愯鏃ュ織锛堝惈鏈満璺緞涓庡彂甯冭褰曪級
 lib/publish-log.jsonl
 
+
+# 本地回滚备份
+*.orig-*
+*.bak-*

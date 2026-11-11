@@ -88,4 +88,13 @@ test('parseResult：纯函数语义（不依赖真子进程）', () => {
 	assert.equal(parseResult({ out: 'x', err: 'boom' }).stderr, 'boom')
 	// 业务自己的 ok:false 要原样传出去，不能被包一层
 	assert.deepEqual(parseResult({ out: '{"ok":false,"stage":"quota"}' }), { ok: false, stage: 'quota' })
+	/* 一个 JSON 都没吐出来时，必须给对象（带 stderr），不能给 null/undefined ——
+	 * 2026-11-11 那两轮 scan 就是「结果不是对象」把 `.ok` 读炸的。 */
+	const none = parseResult({ out: '', err: 'Error: 没登录', code: 1 })
+	assert.equal(typeof none, 'object')
+	assert.equal(none.ok, false)
+	assert.match(none.error, /没返回 JSON/)
+	assert.match(none.stderr, /没登录/)
+	assert.equal(typeof parseResult({ out: '0' }), 'object')
+	assert.equal(parseResult({ out: '0' }).ok, false)
 })
