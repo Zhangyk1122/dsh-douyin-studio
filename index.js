@@ -694,8 +694,14 @@ export function apply(ctx, config) {
 						const c = readInboxCache()
 						const d = (c && c.data) || null
 						const k = (x) => Number((d && d.counts && d.counts[x]) || 0)
+						/* 还是不等：角标不值得为它跑一轮浏览器。
+						 * 但缓存过期了要顺手补一轮，否则角标会永远停在旧数字上骗人。 */
+						const at = (c && c.at) || ''
+						const age = at ? Date.now() - Date.parse(at) : Infinity
+						const stale = !(age >= 0 && age < INBOX_TTL)
+						if (stale && !inboxTask) startInboxRefresh(8).catch(() => {})
 						return sendJson(res, 200, {
-							ok: true, cached: Boolean(c), at: (c && c.at) || '',
+							ok: true, cached: Boolean(c), at, stale,
 							reply: d ? k('dm') + k('at') + k('own') : 0,
 						})
 					}

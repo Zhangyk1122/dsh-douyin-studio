@@ -1,5 +1,17 @@
 # CHANGES
 
+## 0.5.6 — 2026-11-11（她记得自己在抖音做过什么；回复前能看见整段文案；角标不再骗人）
+
+- **抖音里做的事进她自己的记忆**：新增 `lib/events.mjs` 的 spool（0.5.4 已有）+ aurabot 侧的消费者。
+  dy 只往 `dy-spool.ndjson` 单向追加，aurobot 带游标读、写 `memories.json`——**单写者不变**，
+  dy 永远不碰记忆文件。此前「发过作品 / 回过谁」只活在 dy 的 runs.jsonl 里，QQ 那边的小汐完全不知道。
+  （消费者在 aurabot 包里：`src/douyin/bridge.js`，每 60s 跑一次，最多 20 条/次。）
+- `lib/duty.mjs`：候选的 `aweme_title` 从 `desc` 前 **40 字**放宽到 **160 字**。
+  以前她拿到的是被截断的半句文案，回复只能泛泛而谈——不是不会接，是材料被剪了。
+- `index.js`：`/inbox/count` 在缓存过期时**顺手补一轮**（仍不等它），返回值多 `stale`。
+  以前角标只读缓存、永不刷新，数字会一直停在旧值上。
+- 修：`package.json` 带了 BOM，`tests/contract.test.mjs` 解析失败（`Unexpected token '﻿'`）。
+
 ## 0.5.3 — 2026-11-11（评论翻页 + 热评进提示 + 选题能走搜索 + 间隔不再固定）
 
 ### 补记 0.5.1 / 0.5.2（当时只写了 commit message）
