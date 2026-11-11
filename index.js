@@ -449,9 +449,26 @@ export function apply(ctx, config) {
 				let r = null
 				if (st.scanMode === 'search' && kws.length) {
 					const kw = kws[Math.floor(Math.random() * kws.length)]
-					const sr = await run(['search', '--kw', kw, '--count', String(n)], { timeout: 120000 })
+					/* 先试「页面内直连搜索」：一次 10 条 1.4–1.8 秒（实测 1793/1456/1402 ms），
+					 * feed 滚 20 条要 26–63 秒。接口抖动、未登录、结构变了，一律退回 CLI，
+					 * 保证「慢但能跑」永远在。 */
+					let sr = null
+					if (st.scanApi !== false) {
+						try {
+							const { searchFast } = await import('./lib/feedapi.mjs')
+							sr = await searchFast({ keyword: kw, count: Math.min(n, 20), pages: n > 20 ? 2 : 1 })
+						} catch (e) { sr = { ok: false, error: 'api: ' + String((e && e.message) || e).slice(0, 80) } }
+					}
+					let apiError = sr && !sr.ok ? String(sr.error || 'api 没给结果') : ''
+					if (!sr || !sr.ok) {
+						const cr = await run(['search', '--kw', kw, '--count', String(n)], { timeout: 120000 })
+						if (cr && cr.ok) { sr = cr; apiError = apiError ? 'api 失败后转 CLI（' + apiError + '）' : '' }
+						else if (apiError) sr = { ...(cr || {}), error: apiError + ' / cli: ' + String((cr && cr.error) || '没结果') }
+						else sr = cr
+					}
 					/* search 回的是 list，feed 是 items：统一成 items 再进 picks。 */
-					r = sr && sr.ok ? { ...sr, source: 'search', keyword: kw, items: sr.list || [] } : sr
+					if (sr && sr.ok) r = { ...sr, source: 'search', keyword: kw, items: sr.items || sr.list || [], apiError }
+					else r = { ...(sr || {}), stage: 'search', apiError }
 				} else {
 					r = await run(['feed',
 						'--count', String(n),

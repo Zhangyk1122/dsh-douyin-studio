@@ -1,6 +1,6 @@
 # 现状（自动生成）
 
-> 由 `node tools/status.mjs` 生成于 2026-11-11 12:48:08（UTC）
+> 由 `node tools/status.mjs` 生成于 2026-11-11 13:39:24（UTC）
 > **本页数字不要手改** —— 要更新就重跑脚本；其它文档引用这里，不要各写一份。
 
 ## 一、体量
@@ -8,9 +8,9 @@
 | 项 | 值 |
 |---|---|
 | `client.js` | 1740 行 |
-| `index.js` | 1223 行 |
-| lib 模块 | 69 个 |
-| 测试文件 | 51 个 |
+| `index.js` | 1240 行 |
+| lib 模块 | 70 个 |
+| 测试文件 | 52 个 |
 | 受保护文件 | 7 个（`tools/protected.json`） |
 
 ## 二、验收
@@ -20,11 +20,11 @@
 ```
 抖音工作室 · 交付前自检（--quick）
 ────────────────────────────────────────────────────────────────
-✓ 语法        134 个文件都能解析
+✓ 语法        137 个文件都能解析
 ✓ 硬规矩       宿主进程无线程阻塞；白名单 2 处 CLI 同步调用已备案
 ✓ 依赖        仍然零依赖
 ✓ 不变量       守卫 / 缓存 / 异步 都还在被调用
-✓ 体量        client.js 1740/1940  index.js 1223/1250  最大 lib 742/760
+✓ 体量        client.js 1740/1940  index.js 1240/1250  最大 lib 742/760
 ✓ 测试        已跳过（--quick）
 ✓ 禁改区       7 个文件哈希未变
 ✓ 样式真源      client.js 与 assets/panel.css 一致（25645 字符）
@@ -50,4 +50,4 @@ PASS —— 可以交付
 
 - 合计 60 次，失败 3 次
 - 最近一次失败：`dm` → - / 会话没打开（等不到输入框）
-- 按动作分布：tellOwner×10、feed×12、status×6、inbox×8、share×8、dm×8、budget×1、kill×1、doctor×1、help×2、send:at×1、comment-at×1、search×1
+- 按动作分布：feed×12、status×6、inbox×8、share×8、dm×8、tellOwner×9、budget×1、kill×1、doctor×1、help×2、send:at×1、comment-at×1、search×2
