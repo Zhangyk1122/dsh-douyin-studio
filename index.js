@@ -384,8 +384,27 @@ export function apply(ctx, config) {
 						[!atNick ? '昵称' : '', !atUid ? 'uid' : '', !atSec ? 'sec_uid' : ''].filter(Boolean).join('、') + '）',
 				}
 			}
+			/* @ 的那句话以前是写死的「这条我觉得你会喜欢：…」—— 一条模板，天天同一句，
+			 * 用户一眼看出是机器。现在让她自己写；模型抖了才退回模板（模板不会崩，只是不好听）。 */
+			let atText = ''
+			try {
+				const { generate } = await import('./lib/duty.mjs')
+				const { personaLine } = await import('./lib/settings.mjs')
+				const { textOfResult } = await import('./lib/text-guard.mjs')
+				const g = await generate([
+					'你在抖音刷到这条，想 @ 主人来看。',
+					'视频文案：' + (desc || '（没有文案）'),
+					'写一句给他看的话：说清为什么想让他看，别用问号收尾，别提 AI，别用「快来看」这种吆喝。',
+					'不要自己写 @ 昵称 —— 系统会在最前面加 @，你只写后面那半句。',
+				].join('\n'), { system: personaLine(st), timeout: 45000, maxTokens: 90 })
+				/* 她偶尔还是会把「@辰辰」自己写上，而 comment-at 会自动加一次 → 变成「@辰辰 @辰辰 …」。
+				 * 这里统一剥掉开头那个 @，兜住。 */
+				atText = textOfResult(g).replace(/^\s*@\S+\s*/, '').replace(/\s+/g, ' ').trim().slice(0, 60)
+			} catch { atText = '' }
+			if (!atText) atText = '这条我觉得你会喜欢：' + (desc.slice(0, 24) || '刷到的一个')
+			say = atText
 			r = await run(['comment-at', '--aweme', top.aweme_id, '--to', atNick, '--uid', atUid, '--sec', atSec,
-				'--text', '这条我觉得你会喜欢：' + (desc.slice(0, 24) || '刷到的一个')], { timeout: 180000 })
+				'--text', atText], { timeout: 180000 })
 		}
 		const sent = Boolean(r && r.ok)
 		/* 「发出去了」和「他真的收到了」不是一回事：

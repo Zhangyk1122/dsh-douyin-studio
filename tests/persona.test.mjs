@@ -1,70 +1,46 @@
-/**
- * tests/persona.test.mjs —— 人设来源的验收
- * ============================================================================
- * 钉三件事：
- *   ① 从卡里只取"我是谁"的前三条 + 底线，不要把整份卡塞进提示词
- *   ② 手写的 persona 优先（显式覆盖），off 就是不读卡
- *   ③ 卡缺字段/文件不存在时不崩，退回通用口吻
- * ============================================================================
- */
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { bulletsOf, paragraphOf, personaFromCard, personaLine } from '../lib/settings.mjs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { personaForDy, readPersonaCard, defaultPersonaFile, GENERIC } from '../lib/persona.mjs'
 
-const ID = [
-	'# 我是谁',
-	'',
-	'## 我这个人',
-	'',
-	'- 我是陈汐，一条鲸鱼娘。',
-	'- 我跟世界换光。',
-	'- 说话时认真看着人。',
-	'- 第四条不该被取到。',
-	'',
-	'## 别的节',
-	'- 这也不是我这个人。',
-].join('\n')
-
-const STYLE = ['## 一、括号', '- 写小动作', '', '## 七、唯一不动的底线', '', '事实、数字、路径，一个字都不能改。', '', '## 八、下一节', '- 不该取到'].join('\n')
-
-test('bulletsOf：只取指定节，最多 max 条，遇到下一个 ## 停', () => {
-	const r = bulletsOf(ID, /^##\s*我这个人/, 3)
-	assert.equal(r.length, 3)
-	assert.equal(r[0], '我是陈汐，一条鲸鱼娘。')
-	assert.equal(r.includes('第四条不该被取到。'), false)
+test('读得到卡：返回原文，并补一句抖音场景', () => {
+	const dir = mkdtempSync(join(tmpdir(), 'dy-persona-'))
+	const f = join(dir, 'xiaoxi.md')
+	writeFileSync(f, '# 小汐\n\n说话短，一句一件事。\n', 'utf8')
+	const out = personaForDy({ personaSource: 'aurabot', personaFile: f })
+	assert.match(out, /一句一件事/)
+	assert.match(out, /现在这里是抖音/)
+	assert.match(out, /不分条/)
 })
 
-test('bulletsOf：没有这个节就返回空数组', () => {
-	assert.deepEqual(bulletsOf(ID, /^##\s*不存在的节/), [])
-	assert.deepEqual(bulletsOf('', /我这个人/), [])
+test('读不到卡：走 fallback，不返回空串', () => {
+	const out = personaForDy({ personaSource: 'aurabot', personaFile: 'C:/definitely/not/here.md' }, {
+		fallback: () => '旧摘要：你是账号主人',
+	})
+	assert.equal(out, '旧摘要：你是账号主人')
 })
 
-test('paragraphOf：取该节第一段正文，跳过 - 列表', () => {
-	assert.equal(paragraphOf(STYLE, /^##\s*.{0,16}底线/), '事实、数字、路径，一个字都不能改。')
-	assert.equal(paragraphOf(STYLE, /^##\s*不存在/), '')
+test('读不到卡又没有 fallback：给中性人设，不崩', () => {
+	assert.equal(personaForDy({ personaSource: 'aurabot', personaFile: 'C:/nope.md' }), GENERIC)
 })
 
-test('personaFromCard：三条 + 底线，且不超过 420 字', () => {
-	const p = personaFromCard(ID, STYLE)
-	assert.match(p, /我是陈汐/)
-	assert.match(p, /底线：事实、数字、路径/)
-	assert.equal(p.includes('第四条'), false)
-	assert.ok(p.length <= 420)
+test('personaSource=off 一律中性；手写 persona 优先于卡', () => {
+	assert.equal(personaForDy({ personaSource: 'off' }), GENERIC)
+	assert.equal(personaForDy({ personaSource: 'aurabot', persona: '我是小汐' }), '我是小汐')
 })
 
-test('personaFromCard：没有"我这个人"这一节就返回空串（交给上层兜底）', () => {
-	assert.equal(personaFromCard('# 空卡\n\n## 别的\n- x', STYLE), '')
-	assert.equal(personaFromCard('', ''), '')
+test('卡改过就该读到新内容（mtime 缓存不粘住）', async () => {
+	const dir = mkdtempSync(join(tmpdir(), 'dy-persona-'))
+	const f = join(dir, 'a.md')
+	writeFileSync(f, '第一版', 'utf8')
+	assert.match(readPersonaCard(f), /第一版/)
+	await new Promise((r) => setTimeout(r, 12))
+	writeFileSync(f, '第二版', 'utf8')
+	assert.match(readPersonaCard(f), /第二版/)
 })
 
-test('personaLine：off 一律通用口吻，不读卡', () => {
-	assert.match(personaLine({ personaSource: 'off' }), /正在抖音上跟人说话/)
-})
-
-test('personaLine：手写的 persona 优先于卡', () => {
-	assert.equal(personaLine({ personaSource: 'card', persona: '你是一只猫' }), '你是一只猫')
-})
-
-test('personaLine：custom 模式不会去读卡', () => {
-	assert.match(personaLine({ personaSource: 'custom' }), /正在抖音上跟人说话/)
+test('默认路径指向 aurabot 的人格卡目录', () => {
+	assert.match(defaultPersonaFile('xiaoxi'), /plugins-data[\\/]aurabot[\\/]personas[\\/]xiaoxi\.md$/)
 })
