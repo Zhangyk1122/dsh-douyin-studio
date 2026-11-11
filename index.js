@@ -334,6 +334,7 @@ export function apply(ctx, config) {
 		let r = null
 		let say = ''
 		let sayError = ''
+		let atWhy = ''
 		if (tier === 'dm') {
 			r = await run(['share', '--aweme', top.aweme_id, '--to', st.ownerNick,
 				...(ownerSec ? ['--sec', ownerSec] : [])], { timeout: 180000 })
@@ -354,7 +355,10 @@ export function apply(ctx, config) {
 				/* 生成失败也要有一句话。以前这里是 `if (say)`：模型一抖，就只甩一张卡片过去，
 				 * 收件人只看见一个视频，不知道你想说什么 —— 这就是「发视频不发消息」。
 				 * 兜底不是瞎编：它就是这条的标题剪短，信息量够、也不会装成人说的话。 */
-				if (!say) say = '这条想给你看看：' + (desc.slice(0, 24) || '刚刷到的')
+				if (!say) {
+					const { rotate, DM_FALLBACKS } = await import('./lib/caption.mjs')
+					say = rotate(DM_FALLBACKS, Date.now())
+				}
 				const dr = await run(['dm', '--to', ownerSec || st.ownerNick, '--text', say], { timeout: 180000 })
 				/* 带话没发出去 = 卡片旁边没字，等于白说。
 				 * 以前这里只 `say = ''`，失败原因随着变量一起消失 —— 用户只看到"视频没带字"，
@@ -386,22 +390,10 @@ export function apply(ctx, config) {
 			}
 			/* @ 的那句话以前是写死的「这条我觉得你会喜欢：…」—— 一条模板，天天同一句，
 			 * 用户一眼看出是机器。现在让她自己写；模型抖了才退回模板（模板不会崩，只是不好听）。 */
-			let atText = ''
-			try {
-				const { generate } = await import('./lib/duty.mjs')
-				const { personaLine } = await import('./lib/settings.mjs')
-				const { textOfResult } = await import('./lib/text-guard.mjs')
-				const g = await generate([
-					'你在抖音刷到这条，想 @ 主人来看。',
-					'视频文案：' + (desc || '（没有文案）'),
-					'写一句给他看的话：说清为什么想让他看，别用问号收尾，别提 AI，别用「快来看」这种吆喝。',
-					'不要自己写 @ 昵称 —— 系统会在最前面加 @，你只写后面那半句。',
-				].join('\n'), { system: personaLine(st), timeout: 45000, maxTokens: 90 })
-				/* 她偶尔还是会把「@辰辰」自己写上，而 comment-at 会自动加一次 → 变成「@辰辰 @辰辰 …」。
-				 * 这里统一剥掉开头那个 @，兜住。 */
-				atText = textOfResult(g).replace(/^\s*@\S+\s*/, '').replace(/\s+/g, ' ').trim().slice(0, 60)
-			} catch { atText = '' }
-			if (!atText) atText = '这条我觉得你会喜欢：' + (desc.slice(0, 24) || '刷到的一个')
+			const { composeAtText } = await import('./lib/at-text.mjs')
+			const at = await composeAtText({ desc, st })
+			const atText = at.text
+			if (at.why) atWhy = at.why
 			say = atText
 			r = await run(['comment-at', '--aweme', top.aweme_id, '--to', atNick, '--uid', atUid, '--sec', atSec,
 				'--text', atText], { timeout: 180000 })
@@ -422,6 +414,8 @@ export function apply(ctx, config) {
 		} catch { /* 记账失败不影响主流程 */ }
 		if (sent) {
 			const next = { day: today, share: used.share + (tier === 'dm' ? 1 : 0), at: used.at + (tier === 'at' ? 1 : 0), say, sayError,
+				/* 她这句是自己写的还是退回兜底 —— 面板和自检要能分辨，否则"模板句"又悄悄回来了 */
+				...(atWhy ? { atWhy } : {}),
 				aweme: top.aweme_id, tier, notifiedAt: new Date().toISOString(),
 				/* 落账：今天发过哪几条。少了这一行，下一轮又挑同一条（分最高的那条永远是它）。 */
 				sent: [...already, String(top.aweme_id)].slice(-20) }

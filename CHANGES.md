@@ -1,5 +1,26 @@
 # CHANGES
 
+## 0.5.7 — 2026-11-11（@ 不再照搬别人的文案和标签）
+
+真机发出去的是这条：
+`@辰辰辰chen 这条我觉得你会喜欢：#丁达尔之境 #Muse强大的Muse，Muse好`
+—— 生成失败后退回「模板 + 原文案」，话题标签和别人的句子一起带了上去。
+
+- 新增 `lib/caption.mjs`：`cleanCaption()` 先洗掉话题 / @ / 链接 / 表情；
+  `topicsOf()` 把话题词单独摘出来（只当背景，不拼进回复）；
+  `looksCopied()` 判「是不是在照抄」；`AT_FALLBACKS` / `DM_FALLBACKS` 是**她自己的话**，一个字都不搬原文。
+- 新增 `lib/at-text.mjs`：`composeAtText()` 组装 @ 的那半句 —— 洗完的材料 → 生成 → 剥掉她自己写的 @ 和任何 `#话题` → 再查一遍是否照抄，
+  抄了就当没写。生成失败才用兜底，且兜底按秒轮换（`rotate()`），不再天天同一句。
+- `index.js`：@ 分支改调 `composeAtText()`（index.js 从 1269 行回到 1198 行）；`notify-state` 多一个 `atWhy`（`gen-failed` / `copied`），
+  模板句回潮时能看见，不会再悄悄变回机器。
+- `lib/duty.mjs`：评论回复拿到的 `aweme_title` 也走 `cleanCaption`，不再把标签当正文喂进去。
+
+### 从试用过的插件里落下来的做法
+- 语义去重（aurabot `one-reply` 的跨轮去重）→ `looksCopied()`：生成的句子和原文案高度重合就不发。
+- 失败要能查（`tellOwner` 记账那次的教训）→ `atWhy` 写进 `notify-state`，不再只有一句“发失败了”。
+- 轮换取兜底（`lib/tier.mjs` 的轮换思路）→ `rotate()`，兜底文案不再固定。
+- 字段归一（`lib/feedapi.mjs` 的 `normalizeItem`）→ 回复材料统一先清洗再进提示词。
+
 ## 0.5.6 — 2026-11-11（她记得自己在抖音做过什么；回复前能看见整段文案；角标不再骗人）
 
 - **抖音里做的事进她自己的记忆**：新增 `lib/events.mjs` 的 spool（0.5.4 已有）+ aurabot 侧的消费者。
