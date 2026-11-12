@@ -892,6 +892,9 @@ window.__ModuleLoader__.load({
 
     const Inbox = ({ data, err, loading, onReload, onAfterSend, onForce, forcing, onFeed }) => {
       const [tab, setTab] = useState('dm')
+      /* 2026-11-12：默认停在「私信」，可角标算的是三区合计 —— 于是常见「角标 3、列表空」。
+       * 改成：只要用户自己没点过，就自动落到第一个真有东西的区。 */
+      const [tabPicked, setTabPicked] = useState(false)
       const [open, setOpen] = useState('')
       const [all, setAll] = useState(false)
       const [skipped, setSkipped] = useState({})
@@ -903,6 +906,14 @@ window.__ModuleLoader__.load({
       const total = num(counts.dm) + num(counts.at) + num(counts.own)
       /* 服务端给的是「上次的结果 + 后台在刷」。refreshing 为真时自己轮询，
        * 刷完 refreshing 会变 false，轮询自然停 —— 不需要额外的重试上限。 */
+      useEffect(() => {
+        if (tabPicked) return
+        const c = (data && data.counts) || {}
+        const first = TABS.map((t) => t.k).find((k) => num(c[k]) > 0)
+        if (first && first !== tab) setTab(first)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [data && data.counts && JSON.stringify(data.counts)])
+
       const cache = (data && data.cache) || null
       const refreshing = Boolean(cache && cache.refreshing)
 
@@ -942,7 +953,7 @@ window.__ModuleLoader__.load({
         h('div', { 'data-dys-tabs': '' },
           TABS.map((t) => h('button', {
             key: t.k, 'data-dys-tab': '', 'data-on': tab === t.k ? '' : undefined,
-            onClick: () => { setTab(t.k); setOpen('') },
+            onClick: () => { setTabPicked(true); setTab(t.k); setOpen('') },
           }, Ico({ name: t.icon, size: 11 }), h('span', null, t.label),
           h('i', null, num(counts[t.k]) ? String(counts[t.k]) : '')))),
         loading && !data

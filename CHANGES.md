@@ -1,5 +1,20 @@
 # CHANGES
 
+## 0.5.9 — 2026-11-12（两轮空转的真凶：页面回了 `null`）
+
+`rounds.jsonl` 里 11-11、11-12 各有一次 `ok:false`，error 都是
+`Cannot read properties of null (reading 'ok')`，而 `jobs` 那边还是 `ok:true`——
+因为它们记的不是同一件事：作业只管「没抛异常」，轮次才知道「这一轮到底拿到没拿到」。
+
+- 真凶在 `lib/feed.mjs`：`evaluate()` 返回字符串 `"null"` 时，`JSON.parse("null")` 得到 `null`，
+  下一行 `if (!page.ok)` 直接抛 TypeError，真实原因（页面还没长出数据）被这句话盖住。
+- 新增 `pageOf(raw)`：空值 / 非 JSON / 解析成 null / 数字 / 字符串 / 缺 list，六种情况都归一成
+  `{ok:false, error:'人话'}`；`browse()` 改用它。
+- 新增 `tests/pageof.test.mjs` 6 例（含「raw 是 null 不许抛」这条钉子）。
+- 面板：收件箱默认停在「私信」，可角标算的是三区合计 —— 于是常见「角标 3、列表空」。
+  现在只要用户自己没点过，就自动落到第一个真有东西的区（点过之后不再自动跳）。
+- 体量：`index.js 1250/1250`（正好卡线，动它之前先想清楚往哪儿挪）。
+
 ## 0.5.8 — 2026-11-12（页面不再越开越多）
 
 现场：机器人那个 Chrome 里开着 **17 张** 抖音页（15 张 `/jingxuan` + 2 张 `/chat`）。
