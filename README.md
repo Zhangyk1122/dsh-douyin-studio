@@ -18,6 +18,19 @@
 > - 代码里所有"最后一下"都留了闸：`confirm: true`、`--publish`、首次发布先 `dry`、额度与去重。
 >   **别为了让流程跑顺就绕过它们** —— 那是这套东西唯一的安全边际。
 
+## 安装
+
+```bash
+# 1) 应用内：设置 → 插件 → 市场 → 搜 dsh-douyin-studio → 安装
+# 2) 命令行（profile 名换成宿主实际用的那个，桌面版通常是 desktop）
+dsh plugin --profile desktop add dsh-douyin-studio
+```
+
+装完重启宿主，设置页会多一个「抖音工作室」。首次使用：面板里扫码登录 → 设置里填主人 `ownerUid`
+→ 跑 `node tools/dy.mjs doctor` 确认 `cdp up`。默认只读，不自动刷、不自动回。
+
+上架 / 发布流程见 [docs/PUBLISH.md](docs/PUBLISH.md)。
+
 ## 装
 
 前提：Windows + 一个登录着抖音的 Chrome/Edge + DSH。

@@ -853,6 +853,15 @@ export function apply(ctx, config) {
 						}
 					}
 
+					/* ── 页面：几张 + 收一收 ── */
+					if (req.method === 'GET' && p === '/tabs') {
+						const { tabsStatus } = await import('./lib/tabs.mjs')
+						return sendJson(res, 200, await tabsStatus())
+					}
+					if (req.method === 'POST' && p === '/tabs/sweep') {
+						const { sweep } = await import('./lib/tabs.mjs')
+						return sendJson(res, 200, await sweep({ keepChat: 1, keepViewer: 2 }))
+					}
 					/* ── 在「机器人的浏览器」里打开（不是系统默认浏览器） ─────────
 					 * 用户点视频时，系统浏览器是用**他自己的账号**登录的；这里要求用插件
 					 * 托管的那个 Chrome（登录的是机器人号），所以走 CDP 开新标签。 */
@@ -866,9 +875,9 @@ export function apply(ctx, config) {
 							return sendJson(res, 400, { ok: false, error: '只允许打开 douyin.com 的链接' })
 						}
 						try {
-							const { newTab } = await import('./lib/cdp.mjs')
-							const tab = await newTab(link)
-							return sendJson(res, 200, { ok: true, opened: link, tab: tab && (tab.id || tab) })
+							/* 以前每点一次就 newTab，几天堆出 17 张；现在复用并收页 */
+							const { openInRobot } = await import('./lib/tabs.mjs')
+							return sendJson(res, 200, await openInRobot(link))
 						} catch (e) {
 							return sendJson(res, 200, {
 								ok: false, category: 'CDP', error: '打不开机器人浏览器：' + String((e && e.message) || e),
@@ -1194,7 +1203,8 @@ export function apply(ctx, config) {
 		tries: 2,
 		/* 预检只量浏览器这一跳：scan-round 有过 1.2s / 63.6s 的巨大抖动，
 		 * 没有 pre 这个数就分不清是逻辑慢还是 CDP 冷启动/被系统挂起。 */
-		preflight: async () => { const { listTabs } = await import('./lib/cdp.mjs'); await listTabs() },
+		/* 每轮扫描前先收页：17 张页比什么都像脚本 */
+		preflight: async () => { const { sweep } = await import('./lib/tabs.mjs'); await sweep({ keepChat: 1, keepViewer: 2 }) },
 	})
 			const ok = Boolean(r && r.ok !== false && !r.error)
 			const err = ok ? '' : String((r && (r.error || r.stage)) || '没拿到结果')

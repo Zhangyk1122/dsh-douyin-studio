@@ -1,5 +1,23 @@
 # CHANGES
 
+## 0.5.8 — 2026-11-12（页面不再越开越多）
+
+现场：机器人那个 Chrome 里开着 **17 张** 抖音页（15 张 `/jingxuan` + 2 张 `/chat`）。
+每点一次面板里的视频就 `newTab()` 一张，几天下来堆成这样。堆页面的代价不是内存，
+是**风控**——同一个账号在十几个页面间来回跳，比什么脚本特征都显眼。
+
+- 新增 `lib/tabs.mjs`：`reusableViewer()`（纯函数，挑一张能复用的、**不碰聊天页**）、
+  `openReuse()`（有页就导航，没有才开）、`dedupeDouyin()`（只留 1 聊天 + N 看视频）、
+  `tabsStatus()` / `sweep()` / `openInRobot()` 三个给面板用的口子。
+- `index.js`：`POST /open` 改走 `openInRobot()`；新增 `GET /tabs`、`POST /tabs/sweep`；
+  扫描轮 `preflight` 里先收一次页。
+- `lib/chrome.mjs`：传了 `want` 又没命中时，**把现有页导航过去**，不再顺手新开一张
+  （以前「找不到 /chat」= 又一张抖音页）。
+- 面板「诊断与版本」里多一行「开着的页面 · N 张」+「收一收」按钮（展开抽屉才查，不占首屏）。
+- `tests/tabs.test.mjs` 6 例：跳过聊天页 / 空列表返回 null / 别的站不碰 / prefer 命中 / prefer 未命中退回第一张 / 非 page 不算。
+
+实测：`dedupeDouyin()` 关掉 15 张、留 2 张；再查 `/json/list` 只剩 chat + jingxuan。
+
 ## 0.5.7 — 2026-11-11（@ 不再照搬别人的文案和标签）
 
 真机发出去的是这条：

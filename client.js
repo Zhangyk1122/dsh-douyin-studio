@@ -1369,6 +1369,8 @@ window.__ModuleLoader__.load({
     /* ── 面板 ─────────────────────────────────────────────────────────── */
     const Panel = () => {
       const { data, err, loading, load, drop } = useData()
+      /* 诊断里那行「开着的页面」用它；只在抽屉打开时才去查，不占首屏请求。 */
+      const [tabsInfo, setTabsInfo] = useState(null)
       const [busyTag, setBusyTag] = useState('')
       const [msg, setMsg] = useState(null)
       const [savingTrend, setSavingTrend] = useState(false)
@@ -1691,7 +1693,13 @@ window.__ModuleLoader__.load({
 
         /* 调试信息收进抽屉：CDP 端口、uid 不该占一级界面。
          * b<N> 留在摘要行 —— 刷新后对不上就是吃了缓存，这是老规矩。 */
-        h('details', { 'data-dys-diag': '' },
+        h('details', {
+          'data-dys-diag': '',
+          onToggle: async (e) => {
+            if (!(e && e.target && e.target.open) || tabsInfo) return
+            try { setTabsInfo(await jget('/tabs')) } catch { setTabsInfo({ ok: false, count: 0 }) }
+          },
+        },
           h('summary', null, '诊断与版本 · b' + PANEL_BUILD),
           h('div', { 'data-dys-diagbody': '' },
             h('div', { 'data-dys-kv': '' }, h('span', null, '调试端口'),
@@ -1700,6 +1708,20 @@ window.__ModuleLoader__.load({
               h('span', null, ((status && status.self && status.self.user && status.self.user.uid) || '—'))),
             h('div', { 'data-dys-kv': '' }, h('span', null, '每天回评上限'),
               h('span', null, ((cfg && cfg.perDay) || '—') + ' 条')),
+            /* 2026-11-12：一次开了 17 张抖音页，风控最先看见的就是这个。
+             * 这里只放「几张 + 收一收」，不多话。 */
+            h('div', { 'data-dys-kv': '' }, h('span', null, '开着的页面'),
+              h('span', null,
+                (tabsInfo && tabsInfo.ok ? (tabsInfo.count + ' 张') : '—'),
+                h('button', {
+                  type: 'button', 'data-dys-palitem': '', style: { marginLeft: '6px' },
+                  onClick: async () => {
+                    try {
+                      const r = await jpost('/tabs/sweep')
+                      setTabsInfo(r && r.ok ? await jget('/tabs') : { ok: false, error: (r && r.error) || '没收成' })
+                    } catch (e) { setTabsInfo({ ok: false, error: String((e && e.message) || e) }) }
+                  },
+                }, '收一收'))),
             h('div', { 'data-dys-note': '', style: { marginTop: '2px' } },
               '发布和删稿要走工具或命令行（那些需要上下文）。'))))
     }
