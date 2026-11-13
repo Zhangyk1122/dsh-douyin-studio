@@ -1,6 +1,6 @@
 # 现状（自动生成）
 
-> 由 `node tools/status.mjs` 生成于 2026-11-12 13:01:09（UTC）
+> 由 `node tools/status.mjs` 生成于 2026-11-13 04:45:42（UTC）
 > **本页数字不要手改** —— 要更新就重跑脚本；其它文档引用这里，不要各写一份。
 
 ## 一、体量
@@ -27,7 +27,7 @@
 ✓ 体量        client.js 1773/1940  index.js 1250/1250  最大 lib 742/760
 ✓ 测试        已跳过（--quick）
 ✓ 禁改区       7 个文件哈希未变
-✓ 样式真源      client.js 与 assets/panel.css 一致（25645 字符）
+✓ 样式真源      client.js 与 assets/panel.css 一致（26377 字符）
 ✓ 类型契约      12 个纯模块 / 70 个导出都有 JSDoc
 ✓ 发布规则      两条链都是 视频 30 / 图文 20 字
 ✓ 工具契约      36 个工具都在 SKILL.md 里，标题上限 = 图文 ≤20 字，视频 ≤30 字
@@ -42,12 +42,12 @@ PASS —— 可以交付
 
 ## 三、行为自检
 
-✅ 回复 1 条 / 出口 1 次 · 错误 0 · 提醒 1
+❌ 回复 1 条 / 出口 1 次 · 错误 1 · 提醒 0
 
-- ⚠️ `duty-silent` 已经 12 小时没有任何回复/发送（可能是定时器没起、额度用光或掉登录）
+- ❌ `quiet-hours` 静音时段（12:00–18:00）发出去了 1 条
 
 ## 四、最近动作（runs.jsonl 末 60 条）
 
-- 合计 60 次，失败 3 次
-- 最近一次失败：`dm` → - / 会话没打开（等不到输入框）
-- 按动作分布：inbox×6、feed×12、share×8、dm×8、tellOwner×10、status×4、budget×1、kill×1、doctor×2、help×2、send:at×2、comment-at×2、search×2
+- 合计 60 次，失败 2 次
+- 最近一次失败：`dm` → - / 会话列表里没有「辰辰辰chen」
+- 按动作分布：share×7、dm×7、tellOwner×10、feed×12、status×5、budget×1、kill×1、inbox×5、doctor×2、help×2、send:at×3、comment-at×3、search×2

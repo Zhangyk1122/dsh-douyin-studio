@@ -1,27 +1,35 @@
 [data-dys]{
   --dys-fs:13px;
   --dys-r:12px;
-  --dys-ink:currentColor;
-  --dys-line:color-mix(in oklab, currentColor 13%, transparent);
-  --dys-line2:color-mix(in oklab, currentColor 20%, transparent);
+  --dys-ink:var(--dsw-alias-label-primary, currentColor);
+  --dys-sub:var(--dsw-alias-label-secondary, color-mix(in oklab, currentColor 74%, transparent));
+  --dys-line:var(--dsw-alias-border-l1, color-mix(in oklab, currentColor 13%, transparent));
+  --dys-line2:var(--dsw-alias-border-l2, color-mix(in oklab, currentColor 20%, transparent));
   --dys-fill:color-mix(in oklab, currentColor 4%, transparent);
-  --dys-fill2:color-mix(in oklab, currentColor 7.5%, transparent);
+  --dys-fill2:var(--dsw-alias-interactive-bg-hover, color-mix(in oklab, currentColor 7.5%, transparent));
   --dys-lead:color-mix(in oklab, currentColor 9.5%, transparent);
   --dys-raise:color-mix(in oklab, currentColor 14%, transparent);
   --dys-dim:.58;
-  --dys-blue:#6f9ff0;
-  --dys-on-accent:#0c1017;
+  --dys-blue:var(--dsw-alias-brand-primary, #6f9ff0);
+  --dys-on-accent:var(--dsw-alias-label-inverse, #0c1017);
   --dys-teal:#5fc3a4;
   --dys-violet:#a893e6;
-  --dys-amber:#dbae6b;
-  --dys-ok:#5fbf82;
-  --dys-bad:#ef8175;
+  --dys-amber:var(--dsw-alias-state-warn-primary, #dbae6b);
+  --dys-ok:var(--dsw-alias-state-success-primary, #5fbf82);
+  --dys-bad:var(--dsw-alias-state-error-primary, #ef8175);
   box-sizing:border-box;width:100%;max-width:1220px;padding:2px 2px 12px;
   display:flex;flex-direction:column;gap:14px;
   font-size:var(--dys-fs);line-height:1.55;color:var(--dys-ink);
+  font-family:var(--dsh-font-family-ui, inherit);
   font-variant-numeric:tabular-nums;
 }
 [data-dys] *{box-sizing:border-box;}
+/* 键盘可见焦点：宿主里按钮多，之前只有 stat 卡有 focus 样式。 */
+[data-dys] button:focus-visible,[data-dys] a:focus-visible,[data-dys] summary:focus-visible,
+[data-dys] [data-dys-item]:focus-visible{
+  outline:2px solid color-mix(in oklab, var(--dys-blue) 70%, transparent);
+  outline-offset:2px;border-radius:6px;
+}
 /* 浅色下卡片白面、内嵌面板灰面 —— 共用色阶会把主卡压得比普通卡更暗。 */
 [data-dys][data-theme="light"]{
   --dys-dim:.62;
@@ -44,8 +52,9 @@
 [data-dys-col]{display:flex;flex-direction:column;gap:14px;min-width:0;}
 
 /* ── 卡片：只有两级。主卡（收件箱）提亮一档，其余一律同款，不靠彩线区分 ── */
-[data-dys-card]{position:relative;display:flex;flex-direction:column;gap:12px;min-width:0;padding:15px 17px 16px;border-radius:var(--dys-r);border:1px solid var(--dys-line);background:var(--dys-fill);}
-[data-dys-card][data-lead]{background:var(--dys-lead);border-color:var(--dys-line2);}
+/* 卡片面优先用宿主分层色：浅色/深色都由 DSH 给，和 aurabot 那边同一套层次。 */
+[data-dys-card]{position:relative;display:flex;flex-direction:column;gap:12px;min-width:0;padding:15px 17px 16px;border-radius:var(--dys-r);border:1px solid var(--dys-line);background:var(--dsw-alias-bg-layer-1, var(--dys-fill));}
+[data-dys-card][data-lead]{background:var(--dsw-alias-bg-layer-2, var(--dys-lead));border-color:var(--dys-line2);}
 /* 三种卡三种密度：列表要挤（多行），表单要松（手指点得准），数字要立（一眼看大小） */
 [data-dys-card][data-kind="form"]{padding:16px 18px 17px;gap:14px;}
 [data-dys-card][data-kind="metric"]{padding:18px 18px 16px;gap:14px;}

@@ -1,5 +1,18 @@
 # CHANGES
 
+## 0.5.10 — 2026-11-13（面板接上宿主设计令牌，和 aurabot 一套观感）
+
+以前面板自己写死了一套颜色：深色下靠 `color-mix(currentColor)`，浅色下另写一张 `[data-theme="light"]`
+覆盖表。问题是它只认得「明暗」两档，认不出宿主换主题、换字体、换分层色。
+
+- 令牌改成「宿主优先、自家兜底」：`--dys-ink/sub` ← `--dsw-alias-label-primary/secondary`，
+  `--dys-line/line2` ← `--dsw-alias-border-l1/l2`，`--dys-blue` ← `--dsw-alias-brand-primary`，
+  `--dys-ok/bad/amber` ← `state-success/warn/error`，`--dys-fill2` ← `--dsw-alias-interactive-bg-hover`。
+  宿主没给就退回原来的 `color-mix`，老环境不会突然变样。
+- 卡片面用 `--dsw-alias-bg-layer-1`（主卡 `layer-2`），不再靠半透明叠色猜深浅。
+- 字体跟宿主：`font-family:var(--dsh-font-family-ui, inherit)`。
+- 补 `:focus-visible`：按钮 / 链接 / summary / 收件箱行，键盘走路也看得见焦点。
+
 ## 0.5.9 — 2026-11-12（两轮空转的真凶：页面回了 `null`）
 
 `rounds.jsonl` 里 11-11、11-12 各有一次 `ok:false`，error 都是
