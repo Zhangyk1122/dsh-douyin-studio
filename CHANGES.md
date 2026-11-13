@@ -1,6 +1,18 @@
 # CHANGES
 
 
+
+## 0.6.2 — 2026-11-13（抽帧：把一条视频压成一张图）
+
+真机 190 ms 出一张 960×360、34 KB 的 3×2 拼图（6 秒测试片）。
+没有视觉通道时不猜画面 —— `describe()` 明说 `no-vision`，绝不编一段「她看到了什么」。
+
+- 新增 `lib/frames.mjs`：`tileFilter(时长)` 按 6 格算采样（`fps=n/d`），`grabFrames()` 调 ffmpeg
+  抽一帧拼图落 `<outDir>/<aweme>-sheet.jpg`，`describe()` 走 `DOUYIN_STUDIO_VISION_CMD`
+  外部命令（`<cmd> <图片路径>` → stdout 一句话）；没配就返回 `no-vision`。
+- ffmpeg 路径可用 `DOUYIN_FFMPEG` 覆盖，默认 `E:\tools\ffmpeg\ffmpeg.exe`。
+- 测试 `tests/frames.test.mjs` 5 例；全量 638 pass。
+
 ## 0.6.1 — 2026-11-13（看过这条视频；发送结果分三态）
 
 「她到底看没看」以前说不清：提示词里只有文案前 160 字和对方那句话。
