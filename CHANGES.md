@@ -1,5 +1,12 @@
 # CHANGES
 
+## 0.6.6 — 2026-11-13（表情包能真的发进私信了）
+
+- `lib/sticker-send.mjs` 新增 `sendStickerDirect()`：落到 `/chat` → 按 uid/sec_uid/昵称找人 → 点开校验 → 塞图 → 打文案 → 回车；`--dry` 只塞不回车。走的是和日报同一条私信路（`im-locate` + `im-report` 那套），不另造一套点击。
+- `tools/dy.mjs` 新增 `sticker send --to <昵称> [--uid] [--sec] [--id st_x] [--mood] [--tags a,b] [--text "..."] [--dry]`。
+- 全量 667 pass；`check --quick` PASS（40 条命令与 HELP 一致）。
+
+
 ## 0.6.5 — 2026-11-13（私信/评论带图的第一段：把图塞进去，不替你按发送）
 
 - 新增 `lib/sticker-send.mjs`：`planStickerMessage()` 纯判断（图在不在、多大、文案压空白并截断）；`stageFile()` 走 `DOM.setFileInputFiles` 把本地图塞进 `input[type=file]`，没 input 先点一次「图片」按钮再找；`stageStickerDm()` 认人 → 塞图 → 打文案，**不自动回车**；`pressEnter()` 单独暴露给调用方决定何时提交。

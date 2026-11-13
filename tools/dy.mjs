@@ -231,6 +231,21 @@ try {
 			out(r)
 			process.exit(r.ok ? 0 : 1)
 		}
+		if (sub === 'send') {
+			/* 私信发一张本地表情图。--dry 只塞不回车（确认图进没进输入框）。 */
+			const { sendStickerDirect, planStickerMessage } = await import('../lib/sticker-send.mjs')
+			const { pickSticker } = await import('../lib/stickers.mjs')
+			const idArg = String(argOf('--id') || '')
+			const it = idArg ? listStickers({ limit: 200 }).find((x) => x.id === idArg) : pickSticker({ mood: argOf('--mood'), tags })
+			const plan = planStickerMessage({ sticker: it, caption: argOf('--text') || '' })
+			if (!plan.ok) die({ stage: 'plan', error: plan.why })
+			const r = await sendStickerDirect({
+				uid: argOf('--uid') || '', secUid: argOf('--sec') || '', nick: argOf('--to') || '',
+				file: plan.file, text: plan.text, dry: has('--dry'),
+			})
+			out(r)
+			process.exit(r.ok ? 0 : 1)
+		}
 		if (sub === 'stats') {
 			out({ ok: true, ...stickerStats() })
 			process.exit(0)
