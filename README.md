@@ -21,10 +21,12 @@
 ## 安装
 
 ```bash
-# 1) 应用内：设置 → 插件 → 市场 → 搜 dsh-douyin-studio → 安装
-# 2) 命令行（profile 名换成宿主实际用的那个，桌面版通常是 desktop）
-dsh plugin --profile desktop add dsh-douyin-studio
+# 1) 应用内：设置 → 插件 → 市场 → 搜 dsh-douyin-studio → 安装（上架后可用）
+# 2) 命令行，直接从 GitHub 装（现在就能用；profile 名换成宿主实际用的那个，桌面版通常是 desktop）
+dsh plugin --profile desktop add "dsh-douyin-studio@github:dbbdbdhdbxb-design/dsh-douyin-studio"
 ```
+
+仓库：https://github.com/dbbdbdhdbxb-design/dsh-douyin-studio
 
 装完重启宿主，设置页会多一个「抖音工作室」。首次使用：面板里扫码登录 → 设置里填主人 `ownerUid`
 → 跑 `node tools/dy.mjs doctor` 确认 `cdp up`。默认只读，不自动刷、不自动回。
@@ -37,7 +39,7 @@ dsh plugin --profile desktop add dsh-douyin-studio
 
 ```bash
 # 装进某个 profile（desktop / web / 你自己的名字都行）
-dsh plugin --profile desktop add "dsh-douyin-studio@github:<你的GitHub用户名>/dsh-douyin-studio"
+dsh plugin --profile desktop add "dsh-douyin-studio@github:dbbdbdhdbxb-design/dsh-douyin-studio"
 ```
 
 装完**重启 DSH**（`index.js` 是启动时加载的；`client.js` 改完刷新页面就生效）。
@@ -46,7 +48,7 @@ dsh plugin --profile desktop add "dsh-douyin-studio@github:<你的GitHub用户�
 想先不改 profile、直接试命令行：
 
 ```bash
-git clone https://github.com/<你的GitHub用户名>/dsh-douyin-studio.git
+git clone https://github.com/dbbdbdhdbxb-design/dsh-douyin-studio.git
 cd dsh-douyin-studio
 node tools/dy.mjs doctor        # 环境体检：浏览器 / CDP / 登录态 / 额度
 node tools/dy.mjs status        # 我是谁 + 今天还能发几条
