@@ -91,7 +91,7 @@ const die = (o, code = 1) => { process.stdout.write(JSON.stringify({ ok: false, 
 }
 
 const HELP = {
-	commands: ['status', 'sticker', 'works', 'detail', 'likes', 'notices', 'search', 'comments', 'replies', 'reply', 'delcomment', 'publish', 'quick', 'latest', 'check', 'snapshot', 'delete', 'ledger', 'cost', 'doctor', 'trend', 'queue', 'watch', 'login', 'duty', 'dm', 'share', 'names', 'inbox', 'budget', 'dm-send', 'at-reply', 'feed', 'comment-self', 'comment-at', 'comment-image', 'risk', 'digest', 'kill', 'schedule', 'unattended', 'engage'],
+	commands: ['status', 'sticker', 'works', 'detail', 'likes', 'notices', 'search', 'comments', 'replies', 'reply', 'delcomment', 'publish', 'quick', 'latest', 'check', 'snapshot', 'delete', 'ledger', 'cost', 'doctor', 'trend', 'queue', 'watch', 'login', 'duty', 'dm', 'share', 'names', 'inbox', 'budget', 'dm-send', 'at-reply', 'feed', 'comment-self', 'comment-at', 'comment-image', 'risk', 'watchback', 'digest', 'kill', 'schedule', 'unattended', 'engage'],
 	limits: LIMITS,
 	who: WHO,
 	declare: DECLARE,
@@ -837,6 +837,19 @@ try {
 		}
 		out({ ...r, stage: 'api', at: nick, text, budget: q.quota.messages })
 		process.exit(r.ok ? 0 : 1)
+	}
+
+	if (CMD === 'watchback') {
+		/* 谁回了我：只读通知，整理成待回列表（默认只看主人）。 */
+		const { pickReplies } = await import('../lib/watchback.mjs')
+		const { readSettings: rs } = await import('../lib/settings.mjs')
+		const st = rs()
+		const n = await api.notices({ limit: Math.min(numOf('--limit', 30), 60) })
+		if (!n || !n.ok) die({ stage: 'notices', error: (n && n.error) || '通知读不到' })
+		const all = pickReplies(n.items || [], { ownerUid: st.ownerUid || '', limit: Math.min(numOf('--max', 10), 20) })
+		const list = has('--owner-only') ? all.filter((x) => x.fromOwner) : all
+		out({ ok: true, count: list.length, items: list })
+		process.exit(0)
 	}
 
 	if (CMD === 'risk') {

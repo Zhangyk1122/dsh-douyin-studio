@@ -1,65 +1,65 @@
 {
-  "name": "dsh-douyin-studio",
-  "version": "0.7.1",
-  "description": "小汐的抖音工作室：收件箱、自主执行（自己回私信/发作品/报平安）、消息预算、刷视频和一页能调规矩的面板。引擎在 lib/，工具只做参数整形。",
-  "type": "module",
-  "main": "index.js",
-  "exports": {
-    ".": "./index.js",
-    "./package.json": "./package.json",
-    "./client": "./client.js"
-  },
-  "files": [
-    "index.js",
-    "client.js",
-    "lib",
-    "tools",
-    "prompts",
-    "assets",
-    "tests",
-    "docs",
-    "jsconfig.json",
-    "cordis.patch.yml",
-    "SKILL.md",
-    "README.md",
-    "CHANGES.md"
-  ],
-  "keywords": [
-    "deepseek",
-    "harness",
-    "dsh",
-    "dsh-plugin",
-    "douyin",
-    "抖音",
-    "automation",
-    "puppeteer",
-    "cdp"
-  ],
-  "license": "MIT",
-  "engines": {
-    "node": ">=20"
-  },
-  "peerDependencies": {
-    "@deepseek-ai/schemastery": "*",
-    "@deepseek-ai/dsh-tools": "*"
-  },
-  "peerDependenciesMeta": {
-    "@deepseek-ai/schemastery": {
-      "optional": true
-    }
-  },
-  "dependencies": {},
-  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    },
-    "client": {
-      "platform": "web",
-      "inject": [
-        "@deepseek-ai/dsh-client-runtime",
-        "@deepseek-ai/dsh-client-ui-settings",
-        "@deepseek-ai/dsh-client-ui-settings-plugins"
-      ]
-    }
-  }
+	"name": "dsh-douyin-studio",
+	"version": "0.7.2",
+	"description": "小汐的抖音工作室：收件箱、自主执行（自己回私信/发作品/报平安）、消息预算、刷视频和一页能调规矩的面板。引擎在 lib/，工具只做参数整形。",
+	"type": "module",
+	"main": "index.js",
+	"exports": {
+		".": "./index.js",
+		"./package.json": "./package.json",
+		"./client": "./client.js"
+	},
+	"files": [
+		"index.js",
+		"client.js",
+		"lib",
+		"tools",
+		"prompts",
+		"assets",
+		"tests",
+		"docs",
+		"jsconfig.json",
+		"cordis.patch.yml",
+		"SKILL.md",
+		"README.md",
+		"CHANGES.md"
+	],
+	"keywords": [
+		"deepseek",
+		"harness",
+		"dsh",
+		"dsh-plugin",
+		"douyin",
+		"抖音",
+		"automation",
+		"puppeteer",
+		"cdp"
+	],
+	"license": "MIT",
+	"engines": {
+		"node": ">=20"
+	},
+	"peerDependencies": {
+		"@deepseek-ai/schemastery": "*",
+		"@deepseek-ai/dsh-tools": "*"
+	},
+	"peerDependenciesMeta": {
+		"@deepseek-ai/schemastery": {
+			"optional": true
+		}
+	},
+	"dependencies": {},
+	"dsh": {
+		"bundle": {
+			"patch": "./cordis.patch.yml"
+		},
+		"client": {
+			"platform": "web",
+			"inject": [
+				"@deepseek-ai/dsh-client-runtime",
+				"@deepseek-ai/dsh-client-ui-settings",
+				"@deepseek-ai/dsh-client-ui-settings-plugins"
+			]
+		}
+	}
 }
