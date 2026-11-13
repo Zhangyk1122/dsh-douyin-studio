@@ -1,5 +1,13 @@
 # CHANGES
 
+## 0.6.3 — 2026-11-13（表情包库 + @ 身份这两个地基）
+
+- 新增 `lib/stickers.mjs`：本地表情包库。收图（jpg/png/gif/webp，单张 ≤4MB）、按 hash 去重、标签/心情、最多 300 张、超了丢「最没用过」的；挑图按「心情匹配 → 标签命中 → 用得少 → 新增的」排，发一次记一次。
+- 新增 `lib/mention.mjs`：@ 的身份判断。只有「昵称 + 纯数字 uid」才算能 @（昵称可重名，靠它 @ 会 @ 错人）；`planMention()` 返回正文与 `text_extra`，四种理由（off / no-owner / no-uid / already-in-text / prefixed）都能解释。
+- 命令行新增 `dy.mjs sticker add|list|pick|use|rm|stats`（只碰磁盘，不走网络）。
+- 测试 +15（`tests/stickers.test.mjs` 8、`tests/mention.test.mjs` 7）；全量 653 pass。
+
+
 
 
 ## 0.6.2 — 2026-11-13（抽帧：把一条视频压成一张图）

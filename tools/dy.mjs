@@ -88,7 +88,7 @@ const die = (o, code = 1) => { process.stdout.write(JSON.stringify({ ok: false, 
 }
 
 const HELP = {
-	commands: ['status', 'works', 'detail', 'likes', 'notices', 'search', 'comments', 'replies', 'reply', 'delcomment', 'publish', 'quick', 'latest', 'check', 'snapshot', 'delete', 'ledger', 'cost', 'doctor', 'trend', 'queue', 'watch', 'login', 'duty', 'dm', 'share', 'names', 'inbox', 'budget', 'dm-send', 'at-reply', 'feed', 'comment-self', 'comment-at', 'digest', 'kill', 'schedule', 'unattended', 'engage'],
+	commands: ['status', 'sticker', 'works', 'detail', 'likes', 'notices', 'search', 'comments', 'replies', 'reply', 'delcomment', 'publish', 'quick', 'latest', 'check', 'snapshot', 'delete', 'ledger', 'cost', 'doctor', 'trend', 'queue', 'watch', 'login', 'duty', 'dm', 'share', 'names', 'inbox', 'budget', 'dm-send', 'at-reply', 'feed', 'comment-self', 'comment-at', 'digest', 'kill', 'schedule', 'unattended', 'engage'],
 	limits: LIMITS,
 	who: WHO,
 	declare: DECLARE,
@@ -187,6 +187,40 @@ try {
 		const [me, st] = await Promise.all([api.self(), Promise.resolve(stats())])
 		out({ ok: Boolean(me && me.ok), self: me, quota: st })
 		process.exit(me && me.ok ? 0 : 1)
+	}
+
+	if (CMD === 'sticker') {
+		/* 本地表情包库。只碰磁盘：收图 / 查 / 挑 / 记账 / 删。
+		 * 真正把图发出去是 dm / reply 那边的事，这里不做网络。 */
+		const { addSticker, listStickers, pickSticker, markStickerUsed, removeSticker, stickerStats } = await import('../lib/stickers.mjs')
+		const sub = String(argv[1] || 'list')
+		const tags = String(argOf('--tags') || '').split(/[,，]/).map((s) => s.trim()).filter(Boolean)
+		if (sub === 'add') {
+			const r = addSticker(argOf('--file'), { tags, mood: argOf('--mood'), name: argOf('--name') })
+			out(r)
+			process.exit(r.ok ? 0 : 1)
+		}
+		if (sub === 'pick') {
+			const it = pickSticker({ mood: argOf('--mood'), tags })
+			out(it ? { ok: true, sticker: it } : { ok: false, error: '库里没有合适的（先用 sticker add 收几张）' })
+			process.exit(it ? 0 : 1)
+		}
+		if (sub === 'use') {
+			const r = markStickerUsed(argOf('--id'))
+			out(r)
+			process.exit(r.ok ? 0 : 1)
+		}
+		if (sub === 'rm') {
+			const r = removeSticker(argOf('--id'))
+			out(r)
+			process.exit(r.ok ? 0 : 1)
+		}
+		if (sub === 'stats') {
+			out({ ok: true, ...stickerStats() })
+			process.exit(0)
+		}
+		out({ ok: true, stickers: listStickers({ mood: argOf('--mood'), tag: argOf('--tag'), limit: numOf('--limit', 50) }) })
+		process.exit(0)
 	}
 
 	if (CMD === 'works') {
