@@ -9,8 +9,8 @@
 市场靠这三样认人（缺 repository 的条目通常直接被索引脚本跳过）：
 
 ```json
-"repository": { "type": "git", "url": "git+https://github.com/<你的账号>/dsh-douyin-studio.git" },
-"homepage": "https://github.com/<你的账号>/dsh-douyin-studio#readme",
+"repository": { "type": "git", "url": "git+https://github.com/dbbdbdhdbxb-design/dsh-douyin-studio.git" },
+"homepage": "https://github.com/dbbdbdhdbxb-design/dsh-douyin-studio#readme",
 "icon": "assets/logo.svg"
 ```
 
@@ -53,10 +53,10 @@ market（`dshmarket`）的索引源是：
 {
   "name": "dsh-douyin-studio",
   "description": "抖音工作室：收件箱、自动回评/私信、发布、预算与面板",
-  "repo": "https://github.com/<你的账号>/dsh-douyin-studio",
+  "repo": "https://github.com/dbbdbdhdbxb-design/dsh-douyin-studio",
   "npm": "dsh-douyin-studio",
   "tags": ["douyin", "automation", "dsh-plugin"],
-  "author": "<你的账号>"
+  "author": "dbbdbdhdbxb-design"
 }
 ```
 
