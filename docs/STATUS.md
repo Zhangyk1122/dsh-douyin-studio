@@ -1,6 +1,6 @@
 # 现状（自动生成）
 
-> 由 `node tools/status.mjs` 生成于 2026-11-13 05:10:22（UTC）
+> 由 `node tools/status.mjs` 生成于 2026-11-13 05:46:56（UTC）
 > **本页数字不要手改** —— 要更新就重跑脚本；其它文档引用这里，不要各写一份。
 
 ## 一、体量
@@ -9,8 +9,8 @@
 |---|---|
 | `client.js` | 1773 行 |
 | `index.js` | 1250 行 |
-| lib 模块 | 75 个 |
-| 测试文件 | 57 个 |
+| lib 模块 | 77 个 |
+| 测试文件 | 59 个 |
 | 受保护文件 | 7 个（`tools/protected.json`） |
 
 ## 二、验收
@@ -20,7 +20,7 @@
 ```
 抖音工作室 · 交付前自检（--quick）
 ────────────────────────────────────────────────────────────────
-✓ 语法        146 个文件都能解析
+✓ 语法        150 个文件都能解析
 ✓ 硬规矩       宿主进程无线程阻塞；白名单 2 处 CLI 同步调用已备案
 ✓ 依赖        仍然零依赖
 ✓ 不变量       守卫 / 缓存 / 异步 都还在被调用
@@ -50,4 +50,4 @@ PASS —— 可以交付
 
 - 合计 60 次，失败 2 次
 - 最近一次失败：`dm` → - / 会话列表里没有「辰辰辰chen」
-- 按动作分布：tellOwner×10、feed×12、share×6、dm×6、status×6、budget×1、kill×1、inbox×6、doctor×2、help×2、send:at×3、comment-at×3、search×2
+- 按动作分布：tellOwner×10、status×6、budget×1、kill×1、inbox×6、feed×12、share×6、dm×6、doctor×2、help×2、send:at×3、comment-at×3、search×2
