@@ -35,3 +35,13 @@ test('回归：以前「私信优先」会让 at 永远轮不到（shareLeft 恒
 		assert.notEqual(pickTier({ shareLeft: 2, atLeft: 2, usedAt }), 'dm')
 	}
 })
+
+test('晚上还没 @ 过：欠账优先，不许拿私信把这一天糊过去', () => {
+	// 第一轮被窗口/失败挡掉时 usedAt 仍是 0，但 shareLeft 还有 —— 以前会一直走 dm。
+	assert.equal(pickTier({ shareLeft: 2, atLeft: 2, usedAt: 0, hour: 21 }), 'at')
+	assert.equal(pickTier({ shareLeft: 2, atLeft: 2, usedAt: 0, hour: 9 }), 'at')
+	// 已经 @ 过就不欠了，晚上照常走私信。
+	assert.equal(pickTier({ shareLeft: 1, atLeft: 1, usedAt: 1, hour: 21 }), 'dm')
+	// 没给 hour 时行为不变（老调用点不受影响）。
+	assert.equal(pickTier({ shareLeft: 1, atLeft: 1, usedAt: 0 }), 'at')
+})
