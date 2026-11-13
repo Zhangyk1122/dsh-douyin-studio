@@ -42,7 +42,14 @@ import { logRun } from '../lib/runlog.mjs'
 const argv = process.argv.slice(2)
 const CMD = String(argv[0] || '').trim()
 const has = (k) => argv.includes(k)
-const argOf = (k, d = '') => { const i = argv.indexOf(k); return i >= 0 ? (argv[i + 1] ?? d) : d }
+/* `--text --dry` 这种写法：下一个是 flag 就当没给值，别把 --dry 当正文发出去。 */
+const argOf = (k, d = '') => {
+	const i = argv.indexOf(k)
+	if (i < 0) return d
+	const v = argv[i + 1]
+	if (v === undefined || String(v).startsWith('--')) return d
+	return v
+}
 const numOf = (k, d) => { const v = Number(argOf(k, d)); return Number.isFinite(v) ? v : d }
 /* 面板设置 → 环境变量 → 这里是「环境变量」那一跳。
  * 优先级：显式 --flag > 环境变量 > 内置默认。没有这一层，设置页存的数就是死的。 */

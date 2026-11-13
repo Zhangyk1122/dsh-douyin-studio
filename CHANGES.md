@@ -1,3 +1,9 @@
+## 0.7.3
+
+- 修 `tools/dy.mjs` 的 `argOf`：`--text --dry` 这种把 flag 写在值位置时，旧代码会把 `--dry` 当正文发出去（真发过一条 `--dry`）。现在下一个 token 以 `--` 开头就按空值处理。
+- `lib/sticker-send.mjs` 验收改判：图片消息不进 `im.read` 的列表，改成数页面上 `[class*="MessageItemImage"]` 的个数，发前发后对比。
+- 面板观感：卡片/主卡分层投影、hero 双色径向底、数字等宽、标签栏吸顶 + 背景模糊、hover 只在鼠标设备生效（触屏不动）。样式仍以 `assets/panel.css` 为唯一真源，`build-client` 内联。
+
 ## 0.7.2
 
 - 新增 `lib/invite.mjs`：圈地自萌。`isInvite()` 认「小汐/小肥鱼 + 来/回/看看」这类点名邀请；`REFUSE_WORDS`（别来/别刷/别蹭/拉黑…）优先于邀请，命中就闭嘴；`NOISE_RE` 吃掉 666/哈哈哈/前排；`planSpeak({mode:'invite'})` 给调用方一个明确的开/关。

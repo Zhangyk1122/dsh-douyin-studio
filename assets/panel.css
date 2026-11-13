@@ -419,3 +419,40 @@ input[data-dys-in]::placeholder{color:var(--dys-dim);}
 [data-dys-fstep]>i>b{display:block;height:100%;border-radius:999px;background:var(--dys-blue);}
 [data-dys-fstep][data-i="1"]>i>b{background:var(--dys-amber);}
 [data-dys-fstep][data-i="2"]>i>b{background:var(--dys-ok);}
+/* ── 观感微调（0.7.3）────────────────────────────────────────────
+ * 只动「看着像不像成品」，不动信息结构：
+ * 卡片有轻微层次、数字对齐、标签栏吸顶、hover 只在鼠标设备上出现。 */
+[data-dys-card]{
+	gap:11px;
+	background:var(--dsw-alias-bg-layer-1, var(--dys-fill));
+	box-shadow:0 1px 0 color-mix(in oklab, #fff 55%, transparent) inset,
+	0 1px 2px color-mix(in oklab, #000 6%, transparent);
+	transition:border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+[data-dys-card][data-lead]{
+	box-shadow:0 1px 0 color-mix(in oklab, #fff 45%, transparent) inset,
+	0 2px 10px color-mix(in oklab, var(--dys-blue) 10%, transparent);
+}
+@media (hover:hover){
+	[data-dys-card]:hover{
+		border-color:color-mix(in oklab, var(--dys-line) 55%, var(--dys-blue));
+		box-shadow:0 1px 0 color-mix(in oklab, #fff 55%, transparent) inset,
+		0 4px 14px color-mix(in oklab, #000 8%, transparent);
+	}
+}
+[data-dys-hero]{
+	padding:16px 18px;
+	background:
+	radial-gradient(120% 160% at 8% -20%, color-mix(in oklab, var(--dys-blue) 20%, transparent), transparent 62%),
+	radial-gradient(90% 120% at 100% 0%, color-mix(in oklab, var(--dys-teal) 12%, transparent), transparent 55%),
+	var(--dys-fill);
+}
+[data-dys-stat] b{font-variant-numeric:tabular-nums;letter-spacing:-.03em;}
+[data-dys-stat] span{font-variant-numeric:tabular-nums;}
+[data-dys-tabs]{
+	position:sticky;top:0;z-index:3;
+	-webkit-backdrop-filter:saturate(1.4) blur(8px);
+	backdrop-filter:saturate(1.4) blur(8px);
+	background:color-mix(in oklab, var(--dys-fill2) 78%, transparent);
+}
+[data-dys-view]{scroll-padding-top:52px;}
