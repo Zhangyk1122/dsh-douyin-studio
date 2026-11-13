@@ -1,3 +1,8 @@
+## 0.7.4
+
+- 修 `lib/comment-image.mjs` 定位：真机上评论页**没有现成的 contenteditable**，只有一个 `#comment-input-container` 和占位文案「留下你的精彩评论吧」，点一下才长出编辑框。现在分两步：先点容器，再找编辑框；dry 实测日志 `评论框已定位 → 图已塞进评论框 → 文案已写入`。
+- `tests/comment-image.test.mjs` 的选择器校验改成只挑「长得像选择器」的字符串，否则源码里的 `') || [` 会被当选择器，正则编译直接抛。
+
 ## 0.7.3
 
 - 修 `tools/dy.mjs` 的 `argOf`：`--text --dry` 这种把 flag 写在值位置时，旧代码会把 `--dry` 当正文发出去（真发过一条 `--dry`）。现在下一个 token 以 `--` 开头就按空值处理。
