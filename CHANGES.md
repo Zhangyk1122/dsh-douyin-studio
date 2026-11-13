@@ -1,5 +1,23 @@
 # CHANGES
 
+
+## 0.6.1 — 2026-11-13（看过这条视频；发送结果分三态）
+
+「她到底看没看」以前说不清：提示词里只有文案前 160 字和对方那句话。
+现在回评论之前，先真去读一次这条的详情和热评 —— 不调模型、不花钱，884 ms 一条（真机）。
+
+- 新增 `lib/watch.mjs`：`watchOnce(aweme)` 并发取 `api.detail` + `api.comments`，
+  30 分钟内同一条只请求一次；`watchOf()` 折成事实（时长/赞/评/藏/热评三条）；
+  `watchLine()` 只说事实：「这条视频 15 秒、30.9 万 赞、3349 条评论。评论里在说：…」。
+  抽帧要 vision key，本机没有 —— 返回值里明写 `frames: false`，不假装看过画面。
+- `lib/duty.mjs`：`PROMPT` 里多一行「我看过这条：…」；`_run` 生成前 `watchOnce(c.aweme)`，
+  拿不到就少一行材料，不阻塞回复。
+- 新增 `lib/send-state.mjs`：`classifySend()` 把发送结果分成 sent / failed / unknown，
+  超时、断连、CLI 回 null 一律 unknown（`canRetry` 只放 failed）。
+  `lib/runlog.mjs` 给 tellOwner / dm / reply / comment-at 记 `delivery`，事件账同步带上。
+  这一版只记账、不改发送行为 —— 先让账本说实话。
+- 测试：`tests/watch.test.mjs` 6 例、`tests/send-state.test.mjs` 5 例；全量 633 pass。
+
 ## 0.6.0 — 2026-11-13（像人：有心情、有想做的事、会主动开口、记得住人情、说话有停顿）
 
 「像真人」拆开是六件事，这一版先做四件半（剩「看视频」等 vision key）。全部零依赖、全部可回滚。
