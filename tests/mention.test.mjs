@@ -59,13 +59,17 @@ test('剥 @：文案里的 @ 全部去掉，空格压成一个', () => {
 	assert.equal(stripMentions('没有 @ 的句子'), '没有 @ 的句子')
 })
 
-test('text_extra：能 @ 才给条目，且带数字 uid', () => {
-	const e = mentionExtra(OWNER)
+test('text_extra：能 @ 才给条目，且带数字 uid 与 start/end', () => {
+	const text = '@辰辰辰chen 这条你会喜欢'
+	const e = mentionExtra(OWNER, text)
 	assert.equal(e.length, 1)
 	assert.equal(e[0].type, 0)
-	assert.equal(e[0].text, '@辰辰辰chen')
+	assert.equal(e[0].start, 0)
+	assert.equal(e[0].end, '@辰辰辰chen'.length)
 	assert.equal(e[0].user_id, '110149990088')
-	assert.deepEqual(mentionExtra({ nick: '无数字uid' }), [])
+	assert.equal(e[0].sec_uid, OWNER.secUid)
+	assert.equal(e[0].hashtag_name, '')
+	assert.deepEqual(mentionExtra({ nick: '无数字uid' }, text), [])
 })
 
 test('planMention：四种理由各自说清楚', () => {

@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url'
 import * as api from '../lib/api.mjs'
 import * as im from '../lib/im.mjs'
 import { share as shareCard } from '../lib/share.mjs'
-import { ensureBrowser, listTabs, hostOf, port, profileDir, version } from '../lib/cdp.mjs'
+import { ensureBrowser, listTabs, hostOf, port, profileDir, version, withPage } from '../lib/cdp.mjs'
 import { checkQuota, recordReply, recent, stats, LIMITS } from '../lib/ledger.mjs'
 /* 出口记账统一走 sendlog：它内部 await，并按 cid/newCid 幂等。
  * 2026-11-05 之前三个发送分支各写各的，结果一个没 await、一个压根没调 —— 账全丢了。 */
@@ -212,6 +212,22 @@ try {
 		}
 		if (sub === 'rm') {
 			const r = removeSticker(argOf('--id'))
+			out(r)
+			process.exit(r.ok ? 0 : 1)
+		}
+		if (sub === 'collect') {
+			/* 从一条作品的评论里把别人发的图收进库（只读页面 + 下载，不发任何东西） */
+			const aweme = String(argOf('--aweme') || '')
+			if (!aweme) die({ error: '缺 --aweme' })
+			const cs = await api.comments(aweme, { count: Math.min(numOf('--count', 40), 50) })
+			if (!cs || !cs.ok) die({ stage: 'comments', error: (cs && cs.error) || '读不到评论' })
+			const { collectStickers } = await import('../lib/sticker-collect.mjs')
+			const r = await collectStickers(cs.items || [], {
+				max: Math.min(numOf('--max', 8), 20),
+				mood: argOf('--mood'),
+				tags,
+				evaluate: (js) => withPage('www.douyin.com', (c) => c.evaluate(js, { timeout: 30000 })),
+			})
 			out(r)
 			process.exit(r.ok ? 0 : 1)
 		}

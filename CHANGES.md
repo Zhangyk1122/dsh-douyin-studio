@@ -1,5 +1,13 @@
 # CHANGES
 
+## 0.6.4 — 2026-11-13（收藏表情包 + @ 的形状对齐真机）
+
+- 新增 `lib/sticker-collect.mjs`：从评论/私信里把别人发的图收进本地库。`imageUrlsOf()` 认 `image_list / images / sticker.url` 三处、只收 http(s)；`planCollect()` 排重 + 限量；下载走页面内 `fetch(credentials:'include')` → blob → base64 → 落盘 → 入 `stickers` 库，失败只记 `failed` 不中断。
+- `lib/mention.mjs` 的 `mentionExtra()` 改成真机抓到的形状（`start/end` 指向正文里的 `@昵称`，多带 `nickname` 反而会被服务端忽略）；`planMention()` 带上正文一起算位置。
+- 命令行加 `dy.mjs sticker collect --aweme <id> [--max 8] [--mood m] [--tags a,b]`（只读：读评论 + 下载，不发任何东西）。
+- 测试 +6（`tests/sticker-collect.test.mjs`）；全量 659 pass；`check --quick` PASS。
+
+
 ## 0.6.3 — 2026-11-13（表情包库 + @ 身份这两个地基）
 
 - 新增 `lib/stickers.mjs`：本地表情包库。收图（jpg/png/gif/webp，单张 ≤4MB）、按 hash 去重、标签/心情、最多 300 张、超了丢「最没用过」的；挑图按「心情匹配 → 标签命中 → 用得少 → 新增的」排，发一次记一次。
