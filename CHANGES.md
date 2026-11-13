@@ -1,5 +1,25 @@
 # CHANGES
 
+## 0.7.0 — 2026-11-13（照调研补三块：风控冷却、表情「对味」、看图打标）
+
+- **风控冷却** `lib/risk.mjs`（调研 P0-1，蓝本 bili-pond 的 like-cooldown）：`looksLikeRisk()` 认 `-352/-412/2154/3002` 与「频繁/操作太快/验证码」这类文字；`riskState()` 读时自愈；`noteRisk()` 按次数翻倍（30→60→120→封顶 360 分钟）；`coolingGate()` 给一句人话；`guardedWrite()` 冷却中直接拒、失败像风控就记账。CLI 加 `risk` / `risk clear`；所有写命令在总闸后多过一道风控闸（`--dry` 与只读不吃）。
+- **表情「对味」** `lib/stickers.mjs`：`rankStickers()` 新增 `now/cooldownH`，6 小时内刚发过的那张 −3 分（防复读，到点自愈）；新增 `CONTEXT_MOOD` 与 `pickForContext()`（at/share→share，dm→soft，reply→reply，publish→happy）。
+- **入库打标** `lib/vision-label.mjs`：`parseLabel()` 先认 JSON（name/mood/tags/when），没有 JSON 就把文字当「什么时候用」、不编名字；`labelSticker()` 走 `DOUYIN_STUDIO_VISION_CMD`，没配返回 `no-vision`。CLI `sticker add --file <图> --vision`。
+- **设置自洽校验** `lib/settings-check.mjs`：`checkSettings()` 抓「日上限吃不到」「>24 条/天」「静音起止同点」三类，只报警不改值。
+- 新增测试 `tests/risk.test.mjs`(7)、`tests/risk-label.test.mjs`(8)、`tests/comment-image.test.mjs`(6)。
+- 全量 689 pass / 0 fail；`check --quick` PASS（43 条命令与 HELP 一致）。
+- 未接线（下一版）：`pickForContext` 还没接进 at/share 的自动配图；`sticker add --vision` 需要你自己配 `DOUYIN_STUDIO_VISION_CMD` 才有标。
+
+
+## 0.6.7 — 2026-11-13（评论也能带图了）
+
+- 新增 `lib/comment-image.mjs`：`videoUrl()`、`commentBoxJs`（先找 `[data-e2e="comment-input"]`，再退 `[contenteditable="true"]` / `div[role="textbox"]`）、`planCommentImage()`（缺 id / 图不在磁盘直接拒）、`commentWithImage()` —— 打开 `/video/<id>` → 定位评论框 → 点一下聚焦 → 复用 `sticker-send.stageFile()` 把图塞进 `input[type=file]` → `Input.insertText` 写文案 → `pressEnter()`；`dry` 只塞不回车。**没有另造一套点击**，和私信发图同一条路。
+- `tools/dy.mjs` 新增 `comment-image --aweme <id> --file <图> [--text "..."] [--dry]`，已进 `WRITE` 闸门与命令表。
+- 新增 `tests/comment-image.test.mjs` 6 例（地址拼装、缺 id、图不存在、放行、定位脚本选择器）。
+- 全量 673 pass / 0 fail；`check --quick` PASS（41 条命令与 HELP 一致）。
+- 未做真机：评论带图会消耗当天真实额度，等你说了再跑（`--dry` 可以先验图进没进框）。
+
+
 ## 0.6.6 — 2026-11-13（表情包能真的发进私信了）
 
 - `lib/sticker-send.mjs` 新增 `sendStickerDirect()`：落到 `/chat` → 按 uid/sec_uid/昵称找人 → 点开校验 → 塞图 → 打文案 → 回车；`--dry` 只塞不回车。走的是和日报同一条私信路（`im-locate` + `im-report` 那套），不另造一套点击。

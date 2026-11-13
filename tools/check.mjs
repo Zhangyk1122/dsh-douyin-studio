@@ -80,6 +80,7 @@ const skipDir = (p) => p === 'node_modules' || p === 'tmp' || p === '.venv' || p
 const SYNC_ALLOWED = {
 	'lib/check-upload.mjs': 'spawnSync 调 ffprobe 量视频参数，只在发布前的 CLI 流程里跑',
 	'lib/publish-cli.mjs': 'execFileSync 调 ffmpeg 混 BGM，只被 publish CLI 调用（本身是子进程）',
+	'lib/vision-label.mjs': 'spawnSync 调外部看图命令给表情包打标，只被 `sticker add --vision` 的 CLI 流程调用，不在宿主请求路径上',
 }
 
 function walk(dir, out = []) {

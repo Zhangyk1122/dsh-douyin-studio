@@ -76,7 +76,7 @@ const die = (o, code = 1) => { process.stdout.write(JSON.stringify({ ok: false, 
  * 而人在终端里跑 `dy.mjs reply` 是另一条路。同一个 KILL 文件，两条路都得认。
  * 只挡会写出去的动作；--dry 和只读命令照常（出事时更需要看现场）。 */
 {
-	const WRITE = new Set(['reply', 'dm-send', 'share', 'at-reply', 'comment-self', 'comment-at', 'delete', 'delcomment'])
+	const WRITE = new Set(['reply', 'dm-send', 'share', 'at-reply', 'comment-self', 'comment-at', 'comment-image', 'delete', 'delcomment'])
 	const writeNow = CMD === 'publish' ? (has('--publish') || has('--draft'))
 		: CMD === 'dm' ? Boolean(argOf('--text'))
 			: CMD === 'queue' ? (String(argv[1] || argOf('--action', 'list')) === 'retry')
@@ -84,11 +84,14 @@ const die = (o, code = 1) => { process.stdout.write(JSON.stringify({ ok: false, 
 	if (CMD !== 'kill' && writeNow && !has('--dry')) {
 		const { isKilled, killedReply } = await import('../lib/killswitch.mjs')
 		if (isKilled()) die({ ...killedReply(CMD), via: 'cli' })
+		const { coolingGate } = await import('../lib/risk.mjs')
+		const gate = coolingGate()
+		if (gate) die({ stage: 'risk', error: gate, via: 'cli' })
 	}
 }
 
 const HELP = {
-	commands: ['status', 'sticker', 'works', 'detail', 'likes', 'notices', 'search', 'comments', 'replies', 'reply', 'delcomment', 'publish', 'quick', 'latest', 'check', 'snapshot', 'delete', 'ledger', 'cost', 'doctor', 'trend', 'queue', 'watch', 'login', 'duty', 'dm', 'share', 'names', 'inbox', 'budget', 'dm-send', 'at-reply', 'feed', 'comment-self', 'comment-at', 'digest', 'kill', 'schedule', 'unattended', 'engage'],
+	commands: ['status', 'sticker', 'works', 'detail', 'likes', 'notices', 'search', 'comments', 'replies', 'reply', 'delcomment', 'publish', 'quick', 'latest', 'check', 'snapshot', 'delete', 'ledger', 'cost', 'doctor', 'trend', 'queue', 'watch', 'login', 'duty', 'dm', 'share', 'names', 'inbox', 'budget', 'dm-send', 'at-reply', 'feed', 'comment-self', 'comment-at', 'comment-image', 'risk', 'digest', 'kill', 'schedule', 'unattended', 'engage'],
 	limits: LIMITS,
 	who: WHO,
 	declare: DECLARE,
@@ -204,6 +207,21 @@ try {
 			const it = pickSticker({ mood: argOf('--mood'), tags })
 			out(it ? { ok: true, sticker: it } : { ok: false, error: '库里没有合适的（先用 sticker add 收几张）' })
 			process.exit(it ? 0 : 1)
+		}
+		if (sub === 'add' && has('--vision')) {
+			/* 入库时顺手让外部看图命令打标（名字/情绪/什么时候用）。没配命令就明说。 */
+			const file = String(argOf('--file') || argOf('--img') || '')
+			if (!file) die({ error: '缺 --file（要入库的图）' })
+			const { labelSticker } = await import('../lib/vision-label.mjs')
+			const lab = labelSticker(file, { fallbackName: file.split(/[\\/]/).pop() })
+			if (!lab.ok) {
+				const r = addSticker(file, { mood: argOf('--mood'), tags })
+				out({ ...r, label: lab })
+				process.exit(r.ok ? 0 : 1)
+			}
+			const r = addSticker(file, { mood: lab.mood || argOf('--mood'), tags: [...new Set([...(tags || []), ...lab.tags])], name: lab.name })
+			out({ ...r, label: lab })
+			process.exit(r.ok ? 0 : 1)
 		}
 		if (sub === 'use') {
 			const r = markStickerUsed(argOf('--id'))
@@ -817,6 +835,27 @@ try {
 			})
 		}
 		out({ ...r, stage: 'api', at: nick, text, budget: q.quota.messages })
+		process.exit(r.ok ? 0 : 1)
+	}
+
+	if (CMD === 'risk') {
+		/* 风控冷却：默认看状态，`risk clear` 手动解除。 */
+		const mod = await import('../lib/risk.mjs')
+		if (String(argv[1] || '') === 'clear') {
+			out(mod.clearRisk())
+			process.exit(0)
+		}
+		out({ ok: true, ...mod.riskState() })
+		process.exit(0)
+	}
+
+	if (CMD === 'comment-image') {
+		/* 评论带图：走页面上的「图片」按钮 + 回车，不碰上传接口。 */
+		const aweme = argOf('--aweme') || argOf('--id') || ''
+		const file = argOf('--file') || argOf('--img') || ''
+		const { commentWithImage } = await import('../lib/comment-image.mjs')
+		const r = await commentWithImage({ aweme, file, text: argOf('--text') || '', dry: has('--dry') })
+		out(r)
 		process.exit(r.ok ? 0 : 1)
 	}
 
