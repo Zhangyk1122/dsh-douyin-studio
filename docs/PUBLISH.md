@@ -35,8 +35,11 @@ npm publish --access public   # 必须发到 registry.npmjs.org
 2. 包里 `files` 已经把 `index.js / client.js / lib / tools / prompts / assets / SKILL.md /
    CHANGES.md / cordis.patch.yml` 都带上了——**运行时一个文件都不能少**，
    `tools/check.mjs` 的「打包完整」会盯着。
-3. 名字 `dsh-douyin-studio` 在 npm 上若已被占，只能改名（`@你的scope/dsh-douyin-studio`），
-   同时把 `dsh.bundle.patch` 与 README 里的安装命令一起改。
+3. **名字已经被占了**（2026-11-13 实测）：`dsh-douyin-studio@0.6.1` 属于 `mofashinull`，
+   是另一个「抖音视频工厂」插件，不是本仓。所以直接 `npm publish` 会 E403。两条出路：
+   - 换名：`dsh-dy-studio`（实测 404，未占用）——同时改 `package.json.name`、README 安装命令；
+   - 用 scope：`@dbbdbdhdbxb-design/dsh-douyin-studio`（要先在 npm 建同名 scope/org）。
+   不发 npm 也不影响装：第 2、3 节的路径都不依赖它。
 
 ---
 
@@ -47,20 +50,26 @@ market（`dshmarket`）的索引源是：
 - `https://awesome-dsh-plugin.com/plugins.json`
 - 目录站：`https://awesome-dsh-plugin.com`
 
-收录方式是在 `awesome-dsh-plugin` 仓库提一个 PR，往清单里加一条（字段与现有条目保持一致）：
+收录方式是给 `awesome-dsh-plugin` 仓库提一个 PR，**加一个 YAML 文件**（不是改 JSON、也不要手改 README，那两份是脚本生成的）：
 
-```json
-{
-  "name": "dsh-douyin-studio",
-  "description": "抖音工作室：收件箱、自动回评/私信、发布、预算与面板",
-  "repo": "https://github.com/dbbdbdhdbxb-design/dsh-douyin-studio",
-  "npm": "dsh-douyin-studio",
-  "tags": ["douyin", "automation", "dsh-plugin"],
-  "author": "dbbdbdhdbxb-design"
-}
+    data/plugins/<owner>__<repo>.yml
+
+本仓对应的文件与内容：
+
+```yaml
+url: https://github.com/dbbdbdhdbxb-design/dsh-douyin-studio
+name: dbbdbdhdbxb-design/dsh-douyin-studio
+category: workflow
+description:
+  en: Douyin automation driven by CDP on your own Chrome — feed scan, replies, publishing and an event log; zero runtime dependencies.
+  zh: 用 CDP 驱动真 Chrome 的抖音自动化：刷推荐、回评论、发布作品、记事件；零运行时依赖。
 ```
 
-PR 合并后，market 的「发现」页会在下次拉索引时出现它（本机也能立刻验证：
+- 只有 `description.en` 必填；描述里出现 `: `（冒号+空格）必须加引号。
+- 条目里**没有 npm 字段**：市场按 `url` 装，所以不发 npm 也能被搜到。
+- 已提交：<https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/14983>
+
+PR 合并后，目录站的 `plugins.json` 会在下一次重建时多出这条（本机也能立刻验证：
 设置 → 插件 → 市场 → 刷新索引）。
 
 ---
