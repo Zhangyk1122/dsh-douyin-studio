@@ -67,6 +67,21 @@ test('有失败就写失败，不装作一切正常', () => {
 	assert.ok(ep.lines.some((l) => /没成/.test(l.text)))
 })
 
+test('最近一次只数真动作，机器动作不算', () => {
+	const ep = E.buildEpisode({ events: [ev(1, 'status'), ev(2, 'scan')], week: 'w', now: NOW })
+	assert.equal(ep.lines.length, 0, '只有 status/scan 时不许编一条情节')
+})
+
+test('refs 指的必须是同一种动作', () => {
+	const ep = E.buildEpisode({
+		events: [ev(1, 'comment'), ev(2, 'scan'), ev(3, 'comment')],
+		week: 'w',
+		now: NOW,
+	})
+	const first = ep.lines[0]
+	assert.ok(first.refs.every((r) => r.startsWith('dy:comment:')), first.refs.join(','))
+})
+
 test('最多三条', () => {
 	const events = []
 	for (let i = 1; i <= 20; i++) events.push(ev(i, ['comment', 'dm', 'at'][i % 3], { target: { nick: 'n' + (i % 4) } }))
