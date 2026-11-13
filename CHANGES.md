@@ -1,5 +1,13 @@
 # CHANGES
 
+## 0.7.1 — 2026-11-13（只回主人的那一轮 + 表情私信的真实结果）
+
+- `lib/duty.mjs`：`run()/_run()` 新增 `ownerOnly`，候选里 `author_id !== ownerUid` 的直接跳过（验收用，避免扫到别人）；CLI `duty run --owner-only`。
+- `lib/sticker-send.mjs`：定位校验降级 —— `openRow` 的 sec_uid 校验失败但输入框已出现时继续（抖音改过 DOM 后 `currentSecUidJs` 常读空），只记一行日志；塞图后等 2.5 s 再回车（图要先上传完）；发完**回读接口**确认，回读看不到就返回 `ok:false`（不再把「界面点过了」当成功）。
+- 真机结果：`duty run --owner-only --max 2 --auto` → `scanned 71 / fresh 0 / filtered 0 / picked 0`（主人今天没有新评论可回）；文字私信已发到主人号并回读确认；**表情私信仍未通** —— 两次（含换成合法 PNG）都是「塞进输入框」成功、回读没有，已按失败返回。
+- 全量 689 pass；`check --quick` PASS。
+
+
 ## 0.7.0 — 2026-11-13（照调研补三块：风控冷却、表情「对味」、看图打标）
 
 - **风控冷却** `lib/risk.mjs`（调研 P0-1，蓝本 bili-pond 的 like-cooldown）：`looksLikeRisk()` 认 `-352/-412/2154/3002` 与「频繁/操作太快/验证码」这类文字；`riskState()` 读时自愈；`noteRisk()` 按次数翻倍（30→60→120→封顶 360 分钟）；`coolingGate()` 给一句人话；`guardedWrite()` 冷却中直接拒、失败像风控就记账。CLI 加 `risk` / `risk clear`；所有写命令在总闸后多过一道风控闸（`--dry` 与只读不吃）。

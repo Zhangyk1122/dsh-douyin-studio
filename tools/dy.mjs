@@ -310,6 +310,7 @@ try {
 			nick: argOf('--to'),
 			secUid: argOf('--sec'),
 			dry: has('--dry'),
+			ownerOnly: has('--owner-only'),
 		})
 		out(r)
 		process.exit(r.ok ? 0 : 1)
