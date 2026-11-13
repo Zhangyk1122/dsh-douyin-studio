@@ -1,5 +1,12 @@
 # CHANGES
 
+## 0.6.5 — 2026-11-13（私信/评论带图的第一段：把图塞进去，不替你按发送）
+
+- 新增 `lib/sticker-send.mjs`：`planStickerMessage()` 纯判断（图在不在、多大、文案压空白并截断）；`stageFile()` 走 `DOM.setFileInputFiles` 把本地图塞进 `input[type=file]`，没 input 先点一次「图片」按钮再找；`stageStickerDm()` 认人 → 塞图 → 打文案，**不自动回车**；`pressEnter()` 单独暴露给调用方决定何时提交。
+- 为什么先塞不直接发：发送按钮的 DOM 每版都变，`input[type=file]` + 回车两年没变；结果未知时宁可停。
+- 测试 +8（`tests/sticker-send.test.mjs`，含「会话没打开就停、不塞图」）；全量 667 pass；`check --quick` PASS。
+
+
 ## 0.6.4 — 2026-11-13（收藏表情包 + @ 的形状对齐真机）
 
 - 新增 `lib/sticker-collect.mjs`：从评论/私信里把别人发的图收进本地库。`imageUrlsOf()` 认 `image_list / images / sticker.url` 三处、只收 http(s)；`planCollect()` 排重 + 限量；下载走页面内 `fetch(credentials:'include')` → blob → base64 → 落盘 → 入 `stickers` 库，失败只记 `failed` 不中断。
