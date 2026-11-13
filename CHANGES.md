@@ -1,5 +1,28 @@
 # CHANGES
 
+## 0.6.0 — 2026-11-13（像人：有心情、有想做的事、会主动开口、记得住人情、说话有停顿）
+
+「像真人」拆开是六件事，这一版先做四件半（剩「看视频」等 vision key）。全部零依赖、全部可回滚。
+
+- 新增 `lib/mood.mjs`：valence/arousal/energy/affinity 四个量，各有半衰期（6h/3h/4h/720h）；
+  `note(kind)` 记账（被 @ +0.12 唤醒、失败 -0.08、休息回能量），`moodLine()` 只输出「今天什么状态」，
+  **不写进正文**——心情是语气的底色，不是台词。
+- 新增 `lib/purpose.mjs`：早/午/晚三个时段各有一个「想做的事」，按 `sha256(day:slot)` 定种子 →
+  同一天不会变；`markDone()` 记完成。兴趣词最多掺一条，避免整天只想着关键词。
+- 新增 `lib/speakup.mjs`：主动开口的闸门 `decide()`——免打扰、每日上限（默认 2）、冷却（90 分钟）、
+  以及**必须有由头**（有没回的评论 / 心情被撩起来 / 日程里那件事还没做）。没有由头就不说，
+  这是默认，不是异常。
+- 新增 `lib/episodes.mjs`：一周压三条「情节」（做了什么 / 和谁碰过两次以上 / 哪次没成），
+  每条都带 `refs`（事件 id），点得回去；同一周只生成一次。
+- 新增 `lib/rhythm.mjs`：回评论前按字数停 2–6 秒（`typingMs`），普通评论 3% 概率「这次没回」，
+  @ 和私信永不漏；`DOUYIN_STUDIO_FAST=1` 时零延迟（测试用）。
+- `lib/contacts.mjs`：加 `heat/lastHit`，`bumpHeat()` 记「被想起一次」，`heatOf()` 按 30 天半衰；
+  老数据没有这两个字段也照读。
+- `lib/duty.mjs`：`PROMPT` 末尾接 `moodLine()`（并写明「只影响语气，别说出来」）；
+  回评前过 `humanDelay()`。
+- 测试：`tests/mood.test.mjs` 10 例、`tests/purpose.test.mjs` 8 例、`tests/speakup.test.mjs` 9 例、
+  `tests/episodes.test.mjs` 9 例、`tests/rhythm.test.mjs` 6 例。
+
 ## 0.5.12 — 2026-11-13（先判后说：不值得回的不回；晚上了还欠着 @ 就先补）
 
 抄 aurabot `chat/group-policy.js` 的思路：那边「必回 / 插话 / 闭嘴」是**先判后说**，
