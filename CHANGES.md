@@ -1,3 +1,16 @@
+## 0.7.5 — 2026-11-14（表情包私信真的发得进去了）
+
+- **根因一：回读误判。** `lib/im.mjs` 的 `read()` / `conversations()` 用 `if (!text) continue` 过滤空消息，而图片消息的 body 里根本没有 `text`，只有 `{ aweType:2702, cover_width, cover_height, md5, from_gallery:1, resource_url:{ data_size, large_url_list } }`。于是「图已经发出去」被回读判成「没发」。现在认 `aweType 2702` → `kind:'image'`、`text:'[图片]'`，并带回 `bytes`（`resource_url.data_size`）与 `url`。
+- **根因二：会话根本打没打开。** 坐标双击 12 次里只中一两次，其余时候输入框压根不渲染 —— 「图已塞进输入框却没图」一半原因在这。新增 `openRowBySec()` + `clickRowBySecJs`：按 sec_uid 找到会话行，在**行内子元素**上派发 `pointerover/enter/down + mouse down/up + click` 整串合成事件（会话行自己的 props 只有 `onMouseDown`，没有 `onClick`）。
+- **根因三：塞图通道是死的。** `DOM.getDocument {depth:-1}` 在这台 Chrome 上返回空壳、`DOM.querySelector` 恒为 0，`DOM.setFileInputFiles` 从来没真正执行过。改成 `stageFileByReact()`：读文件 → base64 → 页面里造 `File` → 沿 `input.semi-upload-hidden-input` 往上找 `memoizedProps.onFileChange` → **传 File 数组**（handler 要 `e.length/e.filter/e.size`，传 `{files:[]}` 或 `[[file]]` 都抛）。
+- **根因四：确认框只吃原生 click。** 塞完之后弹 `MsgInputSendFileModal`（发送给 X | 文件名 | 801 B | 取消 | 发送(1)）。CDP 的 `Input.dispatchMouseEvent` 点得到按钮但不生效，必须 `el.click()`。新增 `waitSendModal()` / `confirmSendModal()` / `cancelSendModal()`，`--dry` 走到确认框出现就取消（这才真能证明「图进了待发队列」）。
+- `sticker-send.mjs` 里统一用 `evalIn(c, …)`（`openPage()` 返回的是 `{send, ev, close}`，没有 `evaluate`，之前 `c.evaluate is not a function` 就是这么来的）。
+- **附言框真身是 `TEXTAREA.semi-input-textarea`**（343×42 @ 543,418），不是 `MsgInputSendFileModalim-saas-input` —— 那个 class 是外层 wrapper，读它的 `value` 永远空。新增 `SEND_MODAL_CAPTION`，定位顺序：确认框里的 textarea → 任意 textarea/input → 放弃。`--dry` 现在也会先写附言再读回，返回 `captioned: verified / written / no-box`，不真发也能验附言。
+- **真机验收（带附言）**：`dy sticker send --uid 110149990088 --id st_ab831cf67a --text "这张给你诶"` → `ok:true verified:http-image at 12:42:59.272Z bytes:801`；`im.read` 回读看到 `12:42:57.641 kind:text "这张给你诶"` 紧跟 `12:42:59.272 kind:image 801 B` —— 附言先到、图后到，端到端确认。
+- **真机验收**：`dy sticker send --uid 110149990088 --sticker st_ab831cf67a` → `ok:true verified:http-image at 2026-11-14T12:38:41.281Z bytes:801`，`url` 是 douyinpic 的图片地址；日志四步齐（找到会话 → 打开且 sec_uid 校验通过 → 图交给上传 → 确认框 → 已点发送 → 回读确认）。
+- `tests/sticker-send.test.mjs` 重写：18 例，覆盖 MIME 推导、File 数组传参、no-input/no-handler/threw 三种失败、确认框超时、dry 只点取消、以及「im.mjs 必须认 2702 且带回 data_size」的一致性断言。
+- 全量 **705 pass / 0 fail**；`tools/check.mjs --quick` PASS（禁改区 7 文件哈希未变）。
+
 ## 0.7.4
 
 - 修 `lib/comment-image.mjs` 定位：真机上评论页**没有现成的 contenteditable**，只有一个 `#comment-input-container` 和占位文案「留下你的精彩评论吧」，点一下才长出编辑框。现在分两步：先点容器，再找编辑框；dry 实测日志 `评论框已定位 → 图已塞进评论框 → 文案已写入`。

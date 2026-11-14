@@ -25,3 +25,6 @@ Thumbs.db
 
 # 运行日志（含本机路径与发布记录）
 lib/publish-log.jsonl
+
+# 发布页截图（含昵称/主页信息，不进公开仓库）
+lib/publish/shot-*.png
