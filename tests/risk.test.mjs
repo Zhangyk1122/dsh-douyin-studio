@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -59,4 +59,13 @@ test('guardedWrite：失败像风控就记账', async () => {
 	assert.equal(r.risk, 'recorded')
 	assert.ok(r.cooldownMin >= 30)
 	assert.ok(riskFile().endsWith('risk.json'))
+})
+
+test('riskState 只读：冷却过期也不写盘（GET /risk 每次刷新都会调）', () => {
+	const expired = { until: new Date(Date.now() - 60_000).toISOString(), code: -352, reason: '旧账', count: 3 }
+	writeFileSync(riskFile(), JSON.stringify(expired), 'utf8')
+	const before = readFileSync(riskFile(), 'utf8')
+	const st = riskState()
+	assert.equal(st.cooling, false)
+	assert.equal(readFileSync(riskFile(), 'utf8'), before, '读接口把文件改了 —— 头部每次刷新都会写一次盘')
 })

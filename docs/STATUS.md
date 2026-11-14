@@ -1,6 +1,6 @@
 # 现状（自动生成）
 
-> 由 `node tools/status.mjs` 生成于 2026-11-14 14:08:55（UTC）
+> 由 `node tools/status.mjs` 生成于 2026-11-14 14:29:46（UTC）
 > **本页数字不要手改** —— 要更新就重跑脚本；其它文档引用这里，不要各写一份。
 
 ## 一、体量
@@ -10,7 +10,7 @@
 | `client.js` | 1934 行 |
 | `index.js` | 1250 行 |
 | lib 模块 | 92 个 |
-| 测试文件 | 73 个 |
+| 测试文件 | 74 个 |
 | 受保护文件 | 7 个（`tools/protected.json`） |
 
 ## 二、验收
@@ -20,7 +20,7 @@
 ```
 抖音工作室 · 交付前自检（--quick）
 ────────────────────────────────────────────────────────────────
-✓ 语法        179 个文件都能解析
+✓ 语法        180 个文件都能解析
 ✓ 硬规矩       宿主进程无线程阻塞；白名单 3 处 CLI 同步调用已备案
 ✓ 依赖        仍然零依赖
 ✓ 不变量       守卫 / 缓存 / 异步 都还在被调用
@@ -51,4 +51,4 @@ PASS —— 可以交付
 
 - 合计 60 次，失败 9 次
 - 最近一次失败：`sticker` → - / 发了但回读没看到（可能被吞）
-- 按动作分布：send:comment×1、reply×1、dm×2、watchback×1、sticker×14、status×10、risk×1、queue×1、ledger×1、trend×1、comment-image×2、inbox×5、feed×3、send:at×1、comment-at×1、tellOwner×2、share×1、search×1、check×2、help×4、doctor×1、publish×2、engage×1、--help×1
+- 按动作分布：dm×2、watchback×1、sticker×14、status×11、risk×1、queue×1、ledger×1、trend×1、comment-image×2、inbox×6、feed×3、send:at×1、comment-at×1、tellOwner×2、share×1、search×1、check×2、help×4、doctor×1、publish×2、engage×1、--help×1

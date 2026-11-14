@@ -1,3 +1,9 @@
+## 0.7.7 — 2026-11-14（读接口去副作用 + 前端契约测试）
+
+- **`lib/risk.mjs` 的 `riskState()` 改成纯读。** 以前冷却过期时它顺手重写 `risk.json`（`atomicWriteJson`），而这个函数挂在 `GET /risk` 上、面板头部每次刷新都会调 —— 一个 GET 每次刷新都写一次盘。现在过期就返回 `cooling:false` 不落盘，真正的清理交给下一次 `noteRisk` / `clearRisk`。补一条用例：过期后连读两次，文件内容必须逐字不变。
+- **新增 `tests/client-contract.test.mjs`（8 条）。** 0.7.6 的发布卡坏在「前端做了两次点击的本地 arm，payload 里却没有 `confirm`」，711 个后端测试一个都没抓到。这条测试把 `jpost/onPost` 的调用点抓出来，凡是后端要 `confirm: true` 的路径（`/queue/retry`、`/queue/clear`、`/publish`、`/reply`、`/dm/send`、`/picks/act`），前端每一处调用都必须带；另断言 `/publish` 必须带 `kind`，否则视频会被当图文走 `--img`。
+- 测试 **720 pass / 0 fail**（711 + 9）。
+
 ## 0.7.6 — 2026-11-14（按 `审查-2026-11-14.md` 逐条收口）
 
 审阅稿提了 8 条「最该先修」和二十来条 P0/P1/P2。这一版把「面板上点了没反应 / 看着成功其实没做」这一类全部收掉 —— 共同特征是**前端发了后端不认的参数，后端还回 200**，用户永远等不到报错。
