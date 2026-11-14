@@ -9,7 +9,7 @@
   --dys-fill2:var(--dsw-alias-interactive-bg-hover, color-mix(in oklab, currentColor 7.5%, transparent));
   --dys-lead:color-mix(in oklab, currentColor 9.5%, transparent);
   --dys-raise:color-mix(in oklab, currentColor 14%, transparent);
-  --dys-dim:.58;
+  --dys-dim:.66;
   --dys-blue:var(--dsw-alias-brand-primary, #6f9ff0);
   --dys-on-accent:var(--dsw-alias-label-inverse, #0c1017);
   --dys-teal:#5fc3a4;
@@ -26,13 +26,13 @@
 [data-dys] *{box-sizing:border-box;}
 /* 键盘可见焦点：宿主里按钮多，之前只有 stat 卡有 focus 样式。 */
 [data-dys] button:focus-visible,[data-dys] a:focus-visible,[data-dys] summary:focus-visible,
-[data-dys] [data-dys-item]:focus-visible{
+[data-dys] [data-dys-item]:focus-visible,[data-dys] [data-dys-tr]:focus-visible{
   outline:2px solid color-mix(in oklab, var(--dys-blue) 70%, transparent);
   outline-offset:2px;border-radius:6px;
 }
 /* 浅色下卡片白面、内嵌面板灰面 —— 共用色阶会把主卡压得比普通卡更暗。 */
 [data-dys][data-theme="light"]{
-  --dys-dim:.62;
+  --dys-dim:.70;
   --dys-fill:#ffffff;
   --dys-fill2:#f1f2f4;
   --dys-lead:#ffffff;
