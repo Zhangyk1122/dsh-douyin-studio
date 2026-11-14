@@ -374,6 +374,25 @@ if (QUICK) {
 		issues.length ? issues.join(' / ') : '守则在 prompts/operate.md，SKILL.md 已引用（' + md.length + ' 字符）')
 }
 
+/* ⑯ 文档覆盖：HELP 里的每条命令，README 里都得能查到用法 ----------------
+ * ⑬ 只管「HELP ↔ 代码」对不对称，管不了「用户看不看得见」。
+ * 2026-11-14 的实况：43 条命令里 10 条（sticker / comment-at / comment-image /
+ * watchback / risk / kill / schedule / unattended / engage / replies）
+ * 在 README 和 SKILL.md 里一个字都没有 —— 功能能用，等于没有。
+ * 判定就一条：README 里出现过 `dy.mjs <命令>` 就算写了。 */
+{
+	const src = readFileSync(join(ROOT, 'tools', 'dy.mjs'), 'utf8')
+	const help = (src.match(/commands:\s*\[([^\]]+)\]/) || [, ''])[1]
+	const listed = [...new Set([...help.matchAll(/'([a-z-]+)'/g)].map((m) => m[1]))]
+	const readme = readFileSync(join(ROOT, 'README.md'), 'utf8')
+	const missing = listed.filter((c) => !new RegExp('dy\\.mjs\\s+' + c.replace(/-/g, '\\-') + '(?![a-z-])').test(readme))
+	const issues = []
+	if (listed.length < 30) issues.push('只认出 ' + listed.length + ' 条命令，HELP 写法可能变了')
+	if (missing.length) issues.push('README 查不到用法：' + missing.join(','))
+	add(issues.length === 0, '文档覆盖',
+		issues.length ? issues.join(' / ') : listed.length + ' 条命令 README 里都有用法')
+}
+
 /* ── 汇总 ─────────────────────────────────────────────────────────────── */
 console.log('抖音工作室 · 交付前自检' + (QUICK ? '（--quick）' : ''))
 console.log('─'.repeat(64))

@@ -28,6 +28,21 @@ test('白名单解析：中英文逗号、空格都认，去重', () => {
 	assert.deepEqual(authorsOf({}), [])
 })
 
+/* 2026-11-14 审查 E：抖音昵称里带空格很常见。以前一刀按 /[,，\s]+/ 切，
+ * 把 "大地矿业（CDD MINING)" 撕成两片，白名单精确匹配永远命中不了 ——
+ * 就算候选库里有 195 条，清单也是空的。带括号的整段必须当成一个名字。 */
+test('白名单解析：昵称里的空格不许把名字撕开', () => {
+	assert.deepEqual(authorsOf({ engageAuthors: '大地矿业（CDD MINING)' }), ['大地矿业（CDD MINING)'])
+	assert.deepEqual(authorsOf({ engageAuthors: '小A, 大地矿业（CDD MINING)' }), ['小A', '大地矿业（CDD MINING)'])
+})
+
+test('清单里的 aweme 用候选库的 aweme_id，不是空的', () => {
+	const r = planEngage({ engageOn: true, engageAuthors: '小A', engagePerDay: 1, engageGapSec: 0 },
+		{ items: [{ aweme_id: '7685956210915362489', author: '小A', desc: 'x' }] })
+	assert.equal(r.list.length, 1)
+	assert.equal(r.list[0].aweme, '7685956210915362489')
+})
+
 test('关着 / 没白名单：不出清单', () => {
 	assert.equal(planEngage({ ...S, engageOn: false }, { items }).stage, 'engage-off')
 	assert.equal(planEngage({ ...S, engageAuthors: '' }, { items }).stage, 'no-whitelist')

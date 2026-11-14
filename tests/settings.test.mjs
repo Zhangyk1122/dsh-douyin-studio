@@ -46,6 +46,16 @@ test('关键词收成一行，多余空白压掉（CLI 是逗号分隔的）', (
 	assert.equal(normalize({ keywords: '  猫   狗  ' }).keywords, '猫 狗')
 })
 
+/* 2026-11-14 审查 D：面板上「静音时段不叫你」能点、能亮，但 normalize 的白名单里没有它，
+ * 每次保存都被丢掉 —— index.js 永远读到 undefined，等于开关是装饰品。 */
+test('notifyQuiet 必须真的落盘（面板上那个开关不许是装饰品）', () => {
+	assert.equal(DEFAULTS.notifyQuiet, false, '默认不额外静音，保持老行为')
+	assert.equal(normalize({ notifyQuiet: true }).notifyQuiet, true)
+	assert.equal(normalize({ notifyQuiet: false }).notifyQuiet, false)
+	assert.equal(normalize({ notifyQuiet: 'yes' }).notifyQuiet, false, '非布尔值不能当成开')
+	assert.equal(normalize({}).notifyQuiet, false)
+})
+
 test('templates：空数组回默认，超长截断，非数组忽略', () => {
 	assert.deepEqual(normalize({ templates: [] }).templates, DEFAULTS.templates)
 	assert.equal(normalize({ templates: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'] }).templates.length, 8)

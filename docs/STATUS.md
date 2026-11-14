@@ -1,13 +1,13 @@
 # 现状（自动生成）
 
-> 由 `node tools/status.mjs` 生成于 2026-11-14 12:43:32（UTC）
+> 由 `node tools/status.mjs` 生成于 2026-11-14 14:08:55（UTC）
 > **本页数字不要手改** —— 要更新就重跑脚本；其它文档引用这里，不要各写一份。
 
 ## 一、体量
 
 | 项 | 值 |
 |---|---|
-| `client.js` | 1773 行 |
+| `client.js` | 1934 行 |
 | `index.js` | 1250 行 |
 | lib 模块 | 92 个 |
 | 测试文件 | 73 个 |
@@ -24,10 +24,10 @@
 ✓ 硬规矩       宿主进程无线程阻塞；白名单 3 处 CLI 同步调用已备案
 ✓ 依赖        仍然零依赖
 ✓ 不变量       守卫 / 缓存 / 异步 都还在被调用
-✓ 体量        client.js 1773/1940  index.js 1250/1250  最大 lib 742/760
+✓ 体量        client.js 1934/1940  index.js 1250/1250  最大 lib 742/760
 ✓ 测试        已跳过（--quick）
 ✓ 禁改区       7 个文件哈希未变
-✓ 样式真源      client.js 与 assets/panel.css 一致（27683 字符）
+✓ 样式真源      client.js 与 assets/panel.css 一致（27873 字符）
 ✓ 类型契约      12 个纯模块 / 70 个导出都有 JSDoc
 ✓ 发布规则      两条链都是 视频 30 / 图文 20 字
 ✓ 工具契约      36 个工具都在 SKILL.md 里，标题上限 = 图文 ≤20 字，视频 ≤30 字
@@ -36,6 +36,7 @@
 ✓ 命令行一致     43 条命令与 HELP 一致
 ✓ 新能力默认关    无人值守/互动都默认关，开也要过四道闸
 ✓ 提示词守则     守则在 prompts/operate.md，SKILL.md 已引用（902 字符）
+✓ 文档覆盖      43 条命令 README 里都有用法
 ────────────────────────────────────────────────────────────────
 PASS —— 可以交付
 ```
@@ -48,6 +49,6 @@ PASS —— 可以交付
 
 ## 四、最近动作（runs.jsonl 末 60 条）
 
-- 合计 60 次，失败 10 次
+- 合计 60 次，失败 9 次
 - 最近一次失败：`sticker` → - / 发了但回读没看到（可能被吞）
-- 按动作分布：dm×3、sticker×17、notices×2、send:comment×1、reply×1、watchback×1、status×10、risk×1、queue×1、ledger×1、trend×1、comment-image×2、inbox×5、feed×3、send:at×1、comment-at×1、tellOwner×2、share×1、search×1、check×2、help×2、doctor×1
+- 按动作分布：send:comment×1、reply×1、dm×2、watchback×1、sticker×14、status×10、risk×1、queue×1、ledger×1、trend×1、comment-image×2、inbox×5、feed×3、send:at×1、comment-at×1、tellOwner×2、share×1、search×1、check×2、help×4、doctor×1、publish×2、engage×1、--help×1

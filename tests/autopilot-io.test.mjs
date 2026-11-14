@@ -75,6 +75,25 @@ describe('runPublish：判定不靠真发', () => {
 		assert.equal(r.ok, true)
 		assert.match(String(r.skipped), /失败两次/)
 	})
+
+	/* 2026-11-14：自动发布以前不带 --declare，publish-cli 的校验在 --draft 之前就 die，
+	 * 于是每轮都失败一次（「要 --declare（一般 ai）；真发不许 none」），链路一直是坏的。 */
+	it('真跑的 CLI 参数必须带 --declare（否则 publish-cli 连草稿都到不了）', async () => {
+		await writeFile(join(HOME, 'autopilot-state.json'), JSON.stringify({
+			publish: { done: {}, tries: {}, day: '', count: 0 },
+		}))
+		writeSettings({ publishDir: PUB, autoPublish: true, publishMode: 'draft', publishWho: 'private', publishPerDay: 1, activeFrom: '', activeTo: '' })
+		let seen = null
+		auto.configure({ runCli: async (args) => { seen = args; return { ok: true } } })
+		const r = await auto.runPublish({ dry: false, manual: true })
+		assert.equal(r.ok, true)
+		assert.ok(Array.isArray(seen), '应该真的调了一次 CLI')
+		const i = seen.indexOf('--declare')
+		assert.ok(i > 0, '参数里必须有 --declare')
+		assert.equal(seen[i + 1], 'ai', '默认声明是 ai（这套产出确实是模型生成的）')
+		assert.ok(seen.includes('--draft'), 'publishMode=draft 要走草稿，不是直接发')
+		assert.equal(seen[seen.indexOf('--who') + 1], 'private', '--who 跟着 settings 走，默认 private')
+	})
 })
 
 describe('runAt：回 @ 的开关与判定', () => {

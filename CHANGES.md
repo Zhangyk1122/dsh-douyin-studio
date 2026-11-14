@@ -1,3 +1,25 @@
+## 0.7.6 — 2026-11-14（按 `审查-2026-11-14.md` 逐条收口）
+
+审阅稿提了 8 条「最该先修」和二十来条 P0/P1/P2。这一版把「面板上点了没反应 / 看着成功其实没做」这一类全部收掉 —— 共同特征是**前端发了后端不认的参数，后端还回 200**，用户永远等不到报错。
+
+- **A 收件箱「回一条」打不开。** 根因是冒泡：`Item` 整行 `onClick: onOpen`（`client.js:812`），而 Composer（textarea + 回一条按钮）是行内子节点，点输入框就把整块收起。给 Composer 容器加 `onClick: (e) => e.stopPropagation()`。
+- **B 「开值班 / 开盯私信」是假按钮。** 前端发 `{ on: true }`，后端只认 `body.action`，落 into else 分支返回 `200 {ok:true}` —— 看着成功、实际没开。改成 `{ action: 'start' | 'stop' }`。
+- **C 重放 / 清死信空转。** 后端要 `body.confirm === true` 才动手，前端传的是 `{}`，于是回 200 什么都不做。两处都补 `{ confirm: true }`。
+- **D 后端兜底不再回 200。** `/watch`、`/duty` 的 else 分支从 `200 {ok:true, ...status}` 改成 `400 {ok:false, error:'不认识的 action：…', hint:'面板发 {action:"start"|"stop"}…'}`。这一条是防「再长出一个假按钮」的根 —— 不认的参数必须吵。
+- **E `notifyQuiet` 点了会亮但不落盘。** `lib/settings.mjs` 的 `DEFAULTS` 里根本没有这个字段，`normalize()` 自然也不认，面板上那个 switch 是个纯装饰品。补 `notifyQuiet: false` + `normalize` 一行 + 用例（`'yes'` 不算开、缺省 false）。`quietFrom/quietTo` 只说哪段算安静，**这个才决定安静时要不要闭嘴**。
+- **F `engage plan` 永远返回空清单。** 两个真 bug 叠在一起：①`lib/tools-extra.mjs:89` 拿 `loadPicks()` 当数组用（它返回 `{updatedAt, items}`，真实 195 条），`.slice` 抛 TypeError 被 catch 吞掉 → items 恒空；②`lib/engage.mjs` 的 `planEngage` 读 `it.aweme_id` 时漏了字段名（候选库就叫 `aweme_id`），清单里 aweme 恒为空串。顺手重写 `authorsOf()`：按 `,，、;；\n` 切段、**含括号的段整段当一个名字**（抖音昵称常带空格，「大地矿业（CDD MINING)」会被撕成两片，白名单永远命中不了）。修完实测 `scanned:195 / skipped:194 / list[0].aweme` 有值。
+- **G 自主执行 5 个开关要按两次。** `autoDm / autoComment / autoAt / autoPublish / autoReport` 打开之后它会**自己**往别人评论区、私信、公开主页发东西，以前一下点开就生效，页面滑一下手滑就开了，还没有任何回执。现在第一次只把开关染红（`[data-dys-switch][data-armed]`）+ 提示「再点一次就打开」，6 秒不点自己复位。关掉仍然一次就行 —— 关是安全方向。
+- **H 设置页摊开 16 项只在 JSON 里的配置**（审查 P1）：`ownerSecUid`、`scanMode`（推荐流 / 搜索）、`scanApi`、`scanKeywords`、`publishWho`、`unattendedPublish/From/To/PerDay`、`engageOn/engageAuthors/engagePerDay/engageGapSec`、`personaSource`（aurabot / card / custom / off）、`personaFile`。全部逐个核过真实消费者：`scanMode`/`scanApi`/`scanKeywords` → `index.js:442-450`，`unattended*` → `lib/unattended.mjs:95-118`，`engage*` → `lib/engage.mjs` + `lib/tools-extra.mjs:86`，`personaSource` → `lib/persona.mjs:50`。**不为装饰品开口子。**
+- **I 风控冷却终于上了面板**（审查 P0-5）：`lib/risk.mjs` 一直在，但只有 CLI 读它 —— 面板照样显示「今天还能发 N 条」，用户点下去才发现被拒。新增 `GET /risk`（`index.js`，用把 `GET /kill` 压成一行换来的净零行数），头部加胶囊「风控冷却 · 还剩 N 分」，tooltip 带 code 与 reason。
+- **J 「连败 N 次」改名「刷视频连败 N 次」**：那个 `health` 来自 `schedule.health`，数的是刷视频连续失败，不是回评失败。名字错了会让人关错东西。
+- **K 面板有了发布入口**（审查 P0-4）。之前「从零到第一条作品」走不完第 7 步 —— 后端 `POST /publish` 一直在（带 `needsConfirm` 二段确认），前端没有入口。新增 `PublishCard`：文件路径（占位符直接用 `settings.publishDir`，后缀校验 png/jpg/webp/mp4/mov）、标题 20 字计数、可见性 select、文案；「存草稿」「真发」都是二段确认，`who === 'public'` 时多一条 warn 胶囊。底部写清「自主声明固定内容由AI生成，第一次发之前先跑 CLI `dy publish --dry`」。
+- **L README 三处漂移**：`每 5 分钟` → 每 30 分钟（`index.js:1155` 的 `everyMin: 30` 才是真值，`lib/autopilot.mjs:530` 的 `= 5` 只是函数默认值）；`digestAt/digestPerDay` 整段重写（这两个字段已删，真实机制是 `sharePerDay` + `atPerDay` + `lib/tier.mjs` 的 `pickTier`，账在 `notify-state.json`）；测试段「19 个文件、261 例」→ 73 个文件、711 例。
+- **M README 补 10 条查不到的命令**：`sticker *`、`replies`、`comment-at`、`comment-image`、`watchback`、`risk`、`kill`、`schedule`、`unattended`、`engage`。功能一直在，文档里一个字没有，等于没有。
+- **N `check.mjs` 第 ⑯ 条守卫「文档覆盖」**：HELP 里 43 条命令，README 里必须都能查到 `dy.mjs <命令>`。⑬ 只管「HELP ↔ 代码」对不对称，管不了「用户看不看得见」——这次漂移就是这么攒出来的。
+- **O 修一次编码事故（`package.json` 曾被 PowerShell 按 GBK 重写）。** 现象是 `check.mjs` 突然三连挂：`语法` 报 `node:internal/modules/package_json_reader:193`、`测试` 报 `files 覆盖运行时与文档资产`、`打包完整` 报 `files 漏了 index.js,client.js,lib,…`。根因是文件里的中文被按 GBK 重编码、`description` 结尾的引号被吞掉，JSON 直接解析不了 —— `files` 读不到，于是上层全塌。修法：从 `git show HEAD:package.json` 取回原始 UTF-8 版本、只换 `version` 一行、用 node 写回（无 BOM）。**教训：这个仓库的任何文件都不要用 PowerShell 的 `Out-File` / `Set-Content` 写，中文一定会烂。** 顺手扫了全仓文本文件，`lib/im.mjs` 也有一段注释早在接手前就烂了（`/** 发私信… */` 那四行），一并重写。
+- **K 补漏（复核发现）。** 发布卡的「点两次」只是前端本地状态，payload 里没有 `confirm: true` —— 后端 `index.js:914` 只认这个字段，于是永远回 `needsConfirm`，**连草稿都发不出去**。补上 `confirm: true`；顺带补 `kind`（按 `.mp4/.mov` 后缀判 `video`），否则视频会被当图文走 `--img`。这是「前端发后端不认的参数」第三次出现，下一版值得加一条契约测试。
+- 全量 **711 pass / 0 fail**；`tools/check.mjs` PASS（`client.js 1934/1940  index.js 1250/1250  最大 lib 742/760`，禁改区 7 文件哈希未变，样式真源一致 27873 字符）。
+
 ## 0.7.5 — 2026-11-14（表情包私信真的发得进去了）
 
 - **根因一：回读误判。** `lib/im.mjs` 的 `read()` / `conversations()` 用 `if (!text) continue` 过滤空消息，而图片消息的 body 里根本没有 `text`，只有 `{ aweType:2702, cover_width, cover_height, md5, from_gallery:1, resource_url:{ data_size, large_url_list } }`。于是「图已经发出去」被回读判成「没发」。现在认 `aweType 2702` → `kind:'image'`、`text:'[图片]'`，并带回 `bytes`（`resource_url.data_size`）与 `url`。
@@ -9,7 +31,10 @@
 - **真机验收（带附言）**：`dy sticker send --uid 110149990088 --id st_ab831cf67a --text "这张给你诶"` → `ok:true verified:http-image at 12:42:59.272Z bytes:801`；`im.read` 回读看到 `12:42:57.641 kind:text "这张给你诶"` 紧跟 `12:42:59.272 kind:image 801 B` —— 附言先到、图后到，端到端确认。
 - **真机验收**：`dy sticker send --uid 110149990088 --sticker st_ab831cf67a` → `ok:true verified:http-image at 2026-11-14T12:38:41.281Z bytes:801`，`url` 是 douyinpic 的图片地址；日志四步齐（找到会话 → 打开且 sec_uid 校验通过 → 图交给上传 → 确认框 → 已点发送 → 回读确认）。
 - `tests/sticker-send.test.mjs` 重写：18 例，覆盖 MIME 推导、File 数组传参、no-input/no-handler/threw 三种失败、确认框超时、dry 只点取消、以及「im.mjs 必须认 2702 且带回 data_size」的一致性断言。
-- 全量 **705 pass / 0 fail**；`tools/check.mjs --quick` PASS（禁改区 7 文件哈希未变）。
+- **自动发布链路一直是坏的**（`lib/autopilot.mjs` 的 `runPublish`）：给的 CLI 参数里没有 `--declare`，而 `publish-cli` 的校验在 `--draft` 之前就 `die`，于是每轮都失败一次、往 autopilot-log 记一笔 `{"kind":"publish","ok":false,"error":"要 --declare（一般 ai）；真发不许 none"}` —— 连草稿都到不了。属于「断在安全侧」，不等于安全，是链路压根没通。现在补 `'--declare', s.publishDeclare || 'ai'`（这套产出的图文确实是模型生成的，声明 ai 是实话），并加一条用例钉死参数序列：`--declare ai` 必须在、`--draft` 必须在、`--who` 跟着 settings 走（默认 `private`）。
+- 真机验收（发布填表）：`dy publish --img "D:\抖音内容\xiaoxi-20261114.png" --title 小汐 --desc "屏幕里的一条鱼，今天也在。" --who public --declare ai` → `title/desc/who/declare` 四项 `ok`，`declare.read === "内容由AI生成"`，页面三个可见性 label 里只有「公开」是 `data-checked="true"`。**没点发布**。
+- 全量 **708 pass / 0 fail**；`tools/check.mjs` PASS（禁改区 7 文件哈希未变）。
+- `.gitignore` 加 `lib/publish/shot-*.png`：发布页截图带抖音昵称与主页信息，不该进公开仓库。
 
 ## 0.7.4
 

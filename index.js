@@ -573,14 +573,14 @@ export function apply(ctx, config) {
 						return sendJson(res, 200, scheduleSnapshot())
 					}
 					/* 总闸：面板这一下、工具那一层、CLI 那一条，读写的都是同一个 KILL 文件。 */
-					if (req.method === 'GET' && p === '/kill') {
-						return sendJson(res, 200, { ok: true, killed: isKilled(), info: killInfo(), file: killFile() })
-					}
+					if (req.method === 'GET' && p === '/kill') return sendJson(res, 200, { ok: true, killed: isKilled(), info: killInfo(), file: killFile() })
 					if (req.method === 'POST' && p === '/kill') {
 						const body = await readBody(req)
 						setKill(Boolean(body && body.on), String((body && body.reason) || ''))
 						return sendJson(res, 200, { ok: true, killed: isKilled(), info: killInfo(), file: killFile() })
 					}
+					/* 风控冷却（审查 P0-5）：lib/risk.mjs 一直在，但只有 CLI 读它 —— 面板既看不见、也拦不住。头部胶囊读这里。 */
+					if (req.method === 'GET' && p === '/risk') return sendJson(res, 200, { ok: true, ...(await import('./lib/risk.mjs')).riskState() })
 					/* 值班日志：把动作账里跟「回/发/跳」有关的行给面板，不暴露全量。 */
 					if (req.method === 'GET' && p === '/runs') {
 						const n = Math.max(1, Math.min(60, Number(url.searchParams.get('limit') || 20)))
@@ -1076,7 +1076,7 @@ export function apply(ctx, config) {
 						const body = await readBody(req)
 						if (body.action === 'start') return sendJson(res, 200, { ok: true, ...WATCH.start({ everySec: Number(S.watchEverySec) || 90, quiet: true, onFresh: replyDmNow }) })
 						if (body.action === 'stop') return sendJson(res, 200, { ok: true, ...WATCH.stop() })
-						return sendJson(res, 200, { ok: true, ...WATCH.status() })
+						return sendJson(res, 400, { ok: false, error: '不认识的 action：' + String(body.action), hint: '面板发 {action:"start"|"stop"}；这里回 200 会让假按钮看着像成功', ...WATCH.status() })
 					}
 					/* 清队列：只清「已经放弃」的死信，pending 一律不动 */
 					if (req.method === 'POST' && p === '/queue/clear') {
@@ -1099,7 +1099,7 @@ export function apply(ctx, config) {
 							if (body.auto === false) writeSettings({ autoComment: false })
 							return sendJson(res, 200, { ok: true, ...DUTY.stop() })
 						}
-						return sendJson(res, 200, { ok: true, ...DUTY.status() })
+						return sendJson(res, 400, { ok: false, error: '不认识的 action：' + String(body.action), hint: '面板发 {action:"start"|"stop"}；这里回 200 会让假按钮看着像成功', ...DUTY.status() })
 					}
 					/* ── 自主执行：它自己回私信 / 发作品 / 报平安 ────────────────
 					 * GET  = 现在开着什么、今天发了几条、最近自己做过什么

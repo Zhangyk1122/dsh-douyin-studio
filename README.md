@@ -161,6 +161,38 @@ node tools/dy.mjs feed [--count 20] [--rounds 3] [--min-sec 5] [--max-sec 180]
 node tools/dy.mjs budget [--recent 8] [--reset]   # 今天各通道还剩几条、最近发了什么
 ```
 
+# 2026-11-14 补的命令（以前只活在 HELP 里、文档里查不到）
+
+```bash
+node tools/dy.mjs sticker list [--mood soft] [--tag 测试] [--limit 50]
+node tools/dy.mjs sticker add --file a.png [--mood soft] [--tags 蓝,测试] [--name 名字]
+node tools/dy.mjs sticker pick [--mood soft] [--tags …]     # 只看会挑哪张，不发
+node tools/dy.mjs sticker use --id st_xxx                   # 记一次「用过了」（打分时避开最近发的）
+node tools/dy.mjs sticker rm --id st_xxx                    # 删库里的（文件也删）
+node tools/dy.mjs sticker collect [--count 8]               # 从评论区捞图入库（要登录态）
+node tools/dy.mjs sticker send --uid <uid> [--id st_xxx | --mood … ] [--text 附言] [--dry]
+                                              # 私信发一张图。走「塞给 React 的 onFileChange → 等确认框 → 原生 click 发送」
+                                              # 三条都是真机上唯一能走通的路（2026-11-14 打通，见 CHANGES.md 0.7.5）
+node tools/dy.mjs sticker stats                             # 库里多少张、各情绪几张
+
+node tools/dy.mjs replies --aweme <id> --cid <楼根> [--count 20]   # 楼中楼（顶层评论接口拿不到这一层）
+node tools/dy.mjs comment-at --aweme <id> --to "昵称" --uid <uid> --sec <sec_uid> [--text "…"] [--dry]
+                                              # 在评论区真 @ 某人（text_extra type 必须是 0，多带 nickname 会被忽略）
+node tools/dy.mjs comment-image --aweme <id> --file a.png [--text "…"] [--dry]
+                                              # 评论带图：先点容器再找 contenteditable，然后塞图 + 回车
+node tools/dy.mjs watchback [--limit 30] [--max 10] [--owner-only]
+                                              # 谁回了我（通知 31/32 类，最容易被漏的一层），默认只看主人
+node tools/dy.mjs risk [clear]                # 风控冷却状态 / 手动解除。退避 30→60→120→360 分，
+                                              # 命中 352/412/2154/3002 这类码就自动进冷却
+
+node tools/dy.mjs kill status | on [--reason "…"] | off     # 全局停损。开着时所有会发出去的动作一律拒
+node tools/dy.mjs schedule [--days 7]         # 刷视频的排期（谷时窗口里怎么分轮）
+node tools/dy.mjs unattended status | on | off [--from 01:00 --to 06:00 --per-day 2]
+                                              # 无人值守发布。开了只是「允许」，真发还要过四道闸
+node tools/dy.mjs engage status | plan | on --authors "A,B" | off
+                                              # 主动互动灰度。白名单空 = 一条都不碰；同一作者一天只碰一次
+```
+
 **这几样的默认值**：盯私信**开**（插件启动 90 秒后自己开始跑）；值班**关**，自动回也**关**——
 它自己会动手的事，默认得等人点头。
 
@@ -373,12 +405,15 @@ node tools/dy.mjs engage plan      # 只打印"今天会碰谁"
 具体回谁、回什么、发哪个文件，由 `lib/autopilot.mjs` 自己判断。
 
 ```
-每 5 分钟醒一次 → runAll()
+每 30 分钟醒一次 → runAll()      ← index.js:1155 AUTOPILOT.start({ everyMin: 30 })
   ├─ runDm()      读会话 → 过 inbox.judgeDm（该不该回）→ 生成 → 额度 → 发 → 记账
   ├─ runAt()      读「@我」→ 7 天内、有评论落点 → 生成 → 额度 → at-reply → 记账
   ├─ runPublish() 扫 publishDir → 按文件名取没发过的 → 额度 → publish（草稿或直发）
   └─ runReport()  到点给 ownerNick 发一条今天的账
 ```
+
+> 间隔是 `30` 分钟，不是 `lib/autopilot.mjs:530` 那个默认值 5 —— 那个默认值只给
+> 自己调 `start()` 的人用，宿主启动时显式传了 30。改这里要同时改 `index.js:1155`。
 
 护栏（写死，不开放给面板）：
 
@@ -390,7 +425,7 @@ node tools/dy.mjs engage plan      # 只打印"今天会碰谁"
 - 认不出昵称就不发：先抄一次 `/chat` 补名字，补不到就跳过——**不按 uid 猜人**。
 - 静音时段（`quietFrom/quietTo`）不主动发；回评论 / 回私信 / 回 @ / 发布都在谷时窗口内（见上）。
 - 「演练一轮」是 dry：不生成、不发送、不记账，只列出它会怎么做。
-- **每天投递**：`digestAt`（默认 21:00）+ `digestPerDay`（默认 2，0 = 不发）到点从刷视频的筛选结果里挑几条，用分享卡片私信发给 `ownerNick`；当天发过的记在 `digest.sent`，不会重复。它也受谷时与额度闸约束（投递记 `dm` 通道）。
+- **每天投递**：`sharePerDay`（默认 2，0 = 不发）每刷一轮从筛选结果里挑**一条**，用**分享卡片**私信发给 `ownerNick`，再补一句「为什么想给你看」；`atPerDay` 走评论区（在那条视频下 @ 你）。两条路分开计数，落在 `~/.dsh/douyin-studio/notify-state.json` 的 `{day, share, at, sent[]}`，跨天清零；`sent[]` 记的是今天叫过的 aweme_id，避免同一轮轮都被同一条霸榜。老的 `digestAt` / `digestPerDay` **已经删了**（见 `lib/settings.mjs:64`）—— 现在没有「到点投递」这回事，投递跟着刷视频的节拍走。同样受静音时段与额度闸约束。
 - **主人号免限**：`ownerUid` 填了之后，那一人不吃「同一人每天 2 条」（日总量 / 小时 / 间隔 / 同楼照旧）。
 - **口吻**：`persona`（设置页「人设（你谁）」，≤200 字）就是喂给模型的「你是谁」，回私信 / 回 @ / 回评论都读它；
   `botName` 决定报平安的标题（`<botName>日报`，留空就叫「日报」）。两个都留空 = 中性口吻，
@@ -452,10 +487,15 @@ b12 读错字段，所以「出错记录」永远显示一个空白的 `error`�
 node --test tests\*.test.mjs
 ```
 
-十九个文件、261 例。老的十一份：`publish-steps`(17) `publish-seam`(18) `unread`(10)
-`publishes`(6) `fsx`(15) `ledger-broken`(14) `budget`(17) `inbox`(8) `proc`(6) `guard`(10) `cache`(12)；
-后来补的八份（共 119 例）：`autopilot` `autopilot-io` `settings` `feed` `policy` `export`
-`export-rows` `export-route`。全部是「本地逻辑」的测试——**它们绿灯不代表发布成功**。
+**73 个文件、708 例**（2026-11-14 实测：`node --test` 全绿 8.1 s）。
+
+分层的：
+- `publish-steps` `publish-seam` `publish*`：发布链的接缝，不碰真页面
+- `budget` `guard` `cache` `proc` `inbox` `unread` `ledger-broken` `fsx`：账本、额度、并发、缓存
+- `autopilot` `autopilot-io` `settings` `feed` `policy` `export*` `engage` `risk` `sticker-send`
+  `comment-image` `invite` `watchback` `frames` `mention`：后加的能力，一份一个
+
+全部是「本地逻辑」的测试——**它们绿灯不代表发布成功**。
 其中两条是防回退的：`proc` 的并发用例（谁把 `run()` 改回同步它就红）、
 `cache` 的 stale 用例（谁把「先答再改」改成 await，它就红）。
 发布那部分只有真页面跑一遍才算数（见上面「发布」那节）。

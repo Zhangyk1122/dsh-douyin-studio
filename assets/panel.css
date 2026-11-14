@@ -252,6 +252,9 @@
   transition:left .15s ease, background .15s ease;}
 [data-dys-switch][data-on]{background:var(--dys-blue);border-color:transparent;}
 [data-dys-switch][data-on] > i{left:17px;background:var(--dys-on-accent);}
+/* 待确认（2026-11-14）：打开自主执行要按两次，第一次只把开关染红，不落盘。 */
+[data-dys-switch][data-armed]{border-color:var(--dys-bad);background:color-mix(in oklab, var(--dys-bad) 24%, transparent);}
+[data-dys-switch][data-armed] > i{left:17px;background:var(--dys-bad);}
 
 [data-dys-ibx]{display:flex;flex-direction:column;gap:2px;min-height:60px;}
 [data-dys-item]{display:grid;grid-template-columns:6px minmax(0,1fr);gap:9px;
