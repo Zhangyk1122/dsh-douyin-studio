@@ -1,3 +1,36 @@
+## 0.7.12 — 2026-11-15（风控闸门接上触发器 + 值班认静音）
+
+`docs/dsh-studio-重新调研报告-2026-11-15.md` 里点名最狠的一句是：**「闸门看似在位，真被撞时没人记账——比没有闸门更危险」**。说的是 0.7.0 建的 `lib/risk.mjs`：`noteRisk` / `guardedWrite` 两个函数写得挺好，除测试外**零调用方**，`risk.json` 永远是空的。
+
+**A. 风控记账（D1-A）**
+
+- `tools/dy.mjs` 新增 `noteIfRisk()`：写命令输出前先看一眼，`ok === false` 且文案/码像风控就记一次账，返回里多一个 `risk: { recorded, code, cooldownMin, until }`。`out()` 和 `die()` 都走这一层 —— 两个出口，一处逻辑。
+- `WRITE` 白名单和 `writeNow` 判定从总闸块里提出来，由**总闸、风控闸、风控记账三处共用**。以前是块内局部变量，外面看不见，等于只有总闸知道什么算写。
+- `sticker send` 补进写命令：它是 lib 直发、不走 CMD 白名单，以前**总闸和风控闸都拦不住它**（停损开着照样能发图）。
+- `lib/duty.mjs` 的自动回评改走 `guardedWrite(() => reply(...))`：冷却中直接拒并 `break`（后面每条都会被拒，不用再撞），失败像风控就记账。值班是最高频的自动写出口，以前直连 `api.reply`，是所有护栏里唯一漏网的。
+
+**B. 值班认静音（D2-A）**
+
+11-13 就实证过一条 12:00 的自动回评落在 `quietFrom 12:00–18:00` 里。设置页存了 `quietFrom`/`quietTo`，`lib/duty.mjs` 里 `quiet` 出现 **0 次** —— 存了但没人读。
+
+现在自动轮的第一道判断就是静音段（在低峰窗口之前、在 `collect()` 之前）：命中就返回 `skipped: '静音时段（12:00–18:00），先不打扰'`，**一次网络请求都不发**。手动「现在跑一轮」不受影响 —— 人点的就是现在要。
+
+`lib/settings.mjs` 加 `windowWarnings(s)`：静音段和低峰窗口重叠时给一句话（跨午夜也算得出来），`readSettings()` 把它挂在返回值的 `warnings` 上（**算出来的，不落盘** —— `writeSettings` 走 `normalize` 会把它们丢掉）。语义是静音优先，重叠那段不回评，是安全的那一侧。
+
+**C. 桥：报告误判，本来就是通的**
+
+报告说 `dy → aurabot` 记忆桥「有写无读」，依据是「四个模块 + qq-pet + hooks 里找不到消费方」。实际消费方在 `node_modules/dsh-aurabot-qq/src/modules/douyin/index.js:5,23,24`：
+
+```js
+import { createBridge } from '../../douyin/bridge.js'
+const bridge = createBridge({ memory: api.lazy('memory'), log: api.log, ... })
+api.every(60_000, () => bridge.tick(), '抖音事件入记忆')
+```
+
+`setup(api)` 里无条件注册，不受 `config.douyin.enabled` 影响。实测 `plugins-data/aurabot/dy-bridge.json`：`offset 39902`、`ids 71 条`、`at 2026-11-15T01:32:50Z` —— 游标在推进，事件在入记忆。
+
+**测试**：新增 `tests/duty-quiet.test.mjs` 3 例（静音命中一次网络都不发、重叠提示、不重叠不吵人）。**727 例全绿**，`check.mjs` PASS，`client.js 1938/1940  index.js 1246/1250  最大 lib 742/760`，禁改区 7 文件哈希未变。
+
 ## 0.7.11 — 2026-11-15（真的能看视频了：`dy see`）
 
 以前说「抽帧」是个空承诺 —— `lib/frames.mjs` 从 0.6.2 就在，但**没有任何调用方**，`lib/watch.mjs` 里那句 `frames: false` 一直诚实到底。现在接上了。

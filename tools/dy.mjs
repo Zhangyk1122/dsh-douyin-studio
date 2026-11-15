@@ -38,6 +38,8 @@ import { listSnapshots, saveSnapshot, restoreSnapshot } from '../lib/snapshot.mj
 import { markDryRun, markPublished, needsFirstRunDry } from '../lib/firstrun.mjs'
 import { planAtReply } from '../lib/policy.mjs'
 import { logRun } from '../lib/runlog.mjs'
+/* 风控记账（调研报告 D1：闸门有了，触发器没接 —— 撞了也没人记）。 */
+import { noteRisk, looksLikeRisk } from '../lib/risk.mjs'
 
 const argv = process.argv.slice(2)
 const CMD = String(argv[0] || '').trim()
@@ -61,10 +63,33 @@ const envNum = (k, d) => {
 }
 const allOf = (k) => argv.reduce((acc, a, i) => (a === k && argv[i + 1] ? (acc.push(argv[i + 1]), acc) : acc), [])
 
+/* 哪些命令算「写出去」—— 总闸、风控闸、风控记账三处共用这一份，免得各写一遍再走样。 */
+const WRITE = new Set(['reply', 'dm-send', 'share', 'at-reply', 'comment-self', 'comment-at', 'comment-image', 'delete', 'delcomment'])
+const writeNow = CMD === 'publish' ? (has('--publish') || has('--draft'))
+	: CMD === 'dm' ? Boolean(argOf('--text'))
+		: CMD === 'queue' ? (String(argv[1] || argOf('--action', 'list')) === 'retry')
+			: CMD === 'sticker' ? (String(argv[1] || argOf('--action', '')) === 'send')   // 表情私信也是写，以前漏在外面
+				: WRITE.has(CMD)
+
+/* 写命令失败、且失败看着像风控 → 记账。
+ * 2026-11-15：`lib/risk.mjs` 早就写好了，`noteRisk` 却零调用方 —— 冷却文件永远是空的，
+ * 面板那个「风控冷却」胶囊一次都不会亮。闸门只看不记，等于没有闸门。
+ * 已经在冷却 / 停损的不记：那不是「又撞了一次」，再记会把冷却时间越滚越长。 */
+const noteIfRisk = (o) => {
+	if (!writeNow || !o || o.ok !== false) return o
+	if (o.stage === 'risk' || o.stage === 'kill') return o
+	if (!looksLikeRisk(o)) return o
+	try {
+		const rec = noteRisk(o.error || o.why || o.stage || CMD, { code: o.code ?? null })
+		return { ...o, risk: { recorded: true, code: o.code ?? null, cooldownMin: rec.minutes, until: rec.until } }
+	} catch { return o }
+}
+
 const T0 = Date.now()
 /* 每条 CLI 的最终输出都从这里走 —— 顺手记一行「动作账」。
  * 只记结果不记过程：排查时要的是「什么时候、对谁、成没成、卡在哪」。 */
-const out = (o) => {
+const out = (input) => {
+	const o = noteIfRisk(input)
 	try {
 		logRun({
 			kind: CMD || 'cli',
@@ -77,17 +102,12 @@ const out = (o) => {
 	} catch { /* 记账失败不影响输出 */ }
 	process.stdout.write(JSON.stringify(o, null, 1) + '\n')
 }
-const die = (o, code = 1) => { process.stdout.write(JSON.stringify({ ok: false, ...o }, null, 1) + '\n'); process.exit(code) }
+const die = (o, code = 1) => { process.stdout.write(JSON.stringify(noteIfRisk({ ok: false, ...o }), null, 1) + '\n'); process.exit(code) }
 
 /* 总闸在 CLI 这一层也要过一遍：DSH 工具那层挡住的只是"模型调工具"，
  * 而人在终端里跑 `dy.mjs reply` 是另一条路。同一个 KILL 文件，两条路都得认。
  * 只挡会写出去的动作；--dry 和只读命令照常（出事时更需要看现场）。 */
 {
-	const WRITE = new Set(['reply', 'dm-send', 'share', 'at-reply', 'comment-self', 'comment-at', 'comment-image', 'delete', 'delcomment'])
-	const writeNow = CMD === 'publish' ? (has('--publish') || has('--draft'))
-		: CMD === 'dm' ? Boolean(argOf('--text'))
-			: CMD === 'queue' ? (String(argv[1] || argOf('--action', 'list')) === 'retry')
-				: WRITE.has(CMD)
 	if (CMD !== 'kill' && writeNow && !has('--dry')) {
 		const { isKilled, killedReply } = await import('../lib/killswitch.mjs')
 		if (isKilled()) die({ ...killedReply(CMD), via: 'cli' })
