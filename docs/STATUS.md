@@ -1,6 +1,6 @@
 # 现状（自动生成）
 
-> 由 `node tools/status.mjs` 生成于 2026-11-15 05:27:02（UTC）
+> 由 `node tools/status.mjs` 生成于 2026-11-15 08:25:50（UTC）
 > **本页数字不要手改** —— 要更新就重跑脚本；其它文档引用这里，不要各写一份。
 
 ## 一、体量
@@ -27,7 +27,7 @@
 ✓ 体量        client.js 1939/1940  index.js 1250/1250  最大 lib 742/760
 ✓ 测试        已跳过（--quick）
 ✓ 禁改区       7 个文件哈希未变
-✓ 样式真源      client.js 与 assets/panel.css 一致（27912 字符）
+✓ 样式真源      client.js 与 assets/panel.css 一致（27988 字符）
 ✓ 类型契约      12 个纯模块 / 70 个导出都有 JSDoc
 ✓ 发布规则      两条链都是 视频 30 / 图文 20 字
 ✓ 工具契约      36 个工具都在 SKILL.md 里，标题上限 = 图文 ≤20 字，视频 ≤30 字
@@ -43,12 +43,12 @@ PASS —— 可以交付
 
 ## 三、行为自检
 
-✅ 回复 1 条 / 出口 1 次 · 错误 0 · 提醒 0
+✅ 回复 1 条 / 出口 1 次 · 错误 0 · 提醒 1
 
-- 没有异常
+- ⚠️ `duty-silent` 已经 7 小时没有任何回复/发送（可能是定时器没起、额度用光或掉登录）
 
 ## 四、最近动作（runs.jsonl 末 60 条）
 
-- 合计 60 次，失败 12 次
-- 最近一次失败：`engage` → engage-off / -
-- 按动作分布：sticker×1、help×2、publish×4、engage×1、--help×1、status×11、inbox×10、feed×2、send:at×1、comment-at×4、tellOwner×1、see×2、doctor×3、episodes×3、works×3、delete×9、kill×2
+- 合计 60 次，失败 14 次
+- 最近一次失败：`inbox` → - / -
+- 按动作分布：status×10、inbox×8、see×3、doctor×4、comment-at×3、episodes×3、publish×2、works×3、delete×9、kill×5、feed×1、dm×8、search×1
