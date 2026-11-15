@@ -536,17 +536,14 @@ export function apply(ctx, config) {
 				try {
 					const url = new URL(req.url || '/', 'http://127.0.0.1')
 					const p = url.pathname.replace(/^\/api\/douyin-studio/, '') || '/'
-					/* 跨站请求先挡掉：这套接口没有 token，靠的是「只有本机页面会调」。
-					 * 但浏览器里任何一个网页都能往 127.0.0.1 发 POST —— 而这里有
-					 * /dm/send、/queue/retry、/duty，都是真会动手的。见 lib/guard.mjs。 */
+					/* 🔴 访问检查（2026-11-15，市场维护者提的）：lib/guard.mjs 挡得住 cross-site，挡不住「本机另一个进程」。DSH 的 connection 服务有更硬一层 —— Host/Origin 栅栏（防 DNS rebinding）+ 浏览器登录 cookie；官方 dsh-host-open-in-app 路由开头都先问它。故意不写进 inject：那是硬依赖，缺服务会把插件卡成 pending；这里拿到就用、拿不到退回 guard。 */
+					const conn = Reflect.get(ctx, 'connection')
+					const rej = conn && typeof conn.requestRejection === 'function' ? conn.requestRejection(req) : 0
+					if (rej) return sendJson(res, rej, { ok: false, stage: 'auth', error: '请求没过 DSH 的访问检查（' + rej + '）', hint: '面板从 DSH 里打开；命令行用 dy 工具，别直接打 HTTP' })
+					/* 跨站兜底（白名单场景）；非 GET 必须 application/json —— 表单提交是唯一不需要预检的 CSRF 形态。 */
 					const guard = checkOrigin(req.headers)
-					if (!guard.ok) {
-						return sendJson(res, 403, {
-							ok: false, stage: 'guard',
-							error: '拒绝跨站请求：' + guard.why,
-							hint: '如果你是故意从别的地方调，设 DOUYIN_STUDIO_ALLOW_ORIGIN 放行',
-						})
-					}
+					if (!guard.ok) return sendJson(res, 403, { ok: false, stage: 'guard', error: '拒绝跨站请求：' + guard.why, hint: '如果你是故意从别的地方调，设 DOUYIN_STUDIO_ALLOW_ORIGIN 放行' })
+					if (req.method !== 'GET' && !/^application\/json/i.test(String(req.headers['content-type'] || ''))) return sendJson(res, 415, { ok: false, stage: 'type', error: '非 GET 请求必须带 Content-Type: application/json' })
 					if (req.method === 'GET' && p === '/config') {
 						/* 2026-11-01：这里必须回**普通值**，不能回 `cfg.xxx` 本身（那是响应式包装，序列化成 `{}`）。 */
 						return sendJson(res, 200, { ok: true, ...S })

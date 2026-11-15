@@ -1,6 +1,6 @@
 # 现状（自动生成）
 
-> 由 `node tools/status.mjs` 生成于 2026-11-14 14:41:27（UTC）
+> 由 `node tools/status.mjs` 生成于 2026-11-15 01:19:54（UTC）
 > **本页数字不要手改** —— 要更新就重跑脚本；其它文档引用这里，不要各写一份。
 
 ## 一、体量
@@ -8,7 +8,7 @@
 | 项 | 值 |
 |---|---|
 | `client.js` | 1938 行 |
-| `index.js` | 1250 行 |
+| `index.js` | 1247 行 |
 | lib 模块 | 92 个 |
 | 测试文件 | 74 个 |
 | 受保护文件 | 7 个（`tools/protected.json`） |
@@ -24,7 +24,7 @@
 ✓ 硬规矩       宿主进程无线程阻塞；白名单 3 处 CLI 同步调用已备案
 ✓ 依赖        仍然零依赖
 ✓ 不变量       守卫 / 缓存 / 异步 都还在被调用
-✓ 体量        client.js 1938/1940  index.js 1250/1250  最大 lib 742/760
+✓ 体量        client.js 1938/1940  index.js 1247/1250  最大 lib 742/760
 ✓ 测试        已跳过（--quick）
 ✓ 禁改区       7 个文件哈希未变
 ✓ 样式真源      client.js 与 assets/panel.css 一致（27912 字符）
@@ -43,12 +43,13 @@ PASS —— 可以交付
 
 ## 三、行为自检
 
-❌ 回复 1 条 / 出口 2 次 · 错误 1 · 提醒 0
+❌ 回复 0 条 / 出口 0 次 · 错误 1 · 提醒 1
 
 - ❌ `quiet-hours` 静音时段（12:00–18:00）发出去了 1 条
+- ⚠️ `duty-silent` 已经 11 小时没有任何回复/发送（可能是定时器没起、额度用光或掉登录）
 
 ## 四、最近动作（runs.jsonl 末 60 条）
 
 - 合计 60 次，失败 9 次
 - 最近一次失败：`sticker` → - / 发了但回读没看到（可能被吞）
-- 按动作分布：dm×2、watchback×1、sticker×14、status×11、risk×1、queue×1、ledger×1、trend×1、comment-image×2、inbox×6、feed×3、send:at×1、comment-at×1、tellOwner×2、share×1、search×1、check×2、help×4、doctor×1、publish×2、engage×1、--help×1
+- 按动作分布：sticker×14、status×12、risk×1、queue×1、ledger×1、trend×1、comment-image×2、inbox×7、feed×3、send:at×1、comment-at×1、tellOwner×2、share×1、dm×1、search×1、check×2、help×4、doctor×1、publish×2、engage×1、--help×1

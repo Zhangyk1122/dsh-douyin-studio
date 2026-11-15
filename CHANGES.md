@@ -1,3 +1,12 @@
+## 0.7.9 — 2026-11-15（补 DSH 的访问检查：市场维护者合并时提的那条）
+
+- **以前只有自己写的 Origin 判断**（`lib/guard.mjs`）：能挡 `sec-fetch-site: cross-site`，挡不住「同一台机器上另一个进程」。维护者 fkysly 在 PR #14983 合并时，把这条写进了插件描述里。
+- **接入 DSH 的 `connection` 服务**：路由入口第一句就问 `conn.requestRejection(req)`，照官方 `dsh-host-open-in-app` 的写法（`connectionOf(ctx)` + `rejected(req, res)`）。它给两道更硬的门 —— Host/Origin 栅栏（Host 必须是 loopback / 绑定地址，`sec-fetch-site: cross-site` 直接 403，防 DNS rebinding）+ 浏览器登录 cookie（没过认证 401）。
+- **故意不写进 `inject`**：那是硬依赖，宿主没这个服务会把整个插件卡成 pending（面板消失、工具全废）。改成运行时 `Reflect.get(ctx, 'connection')`，拿到就用、拿不到退回 `guard.mjs`，单测环境照旧能跑。
+- **非 GET 必须带 `Content-Type: application/json`**：`text/plain` 这类简单请求不过预检就能发出去，是 `guard.mjs` 之外还剩的一条 CSRF 缝。面板自己的 `jfetch` 一直带 `content-type: application/json`，不受影响。
+- 保留 `guard.mjs` 作白名单 / 反向代理场景的兜底（`DOUYIN_STUDIO_ALLOW_ORIGIN`）。
+- 测试 **720 pass / 0 fail**；`check.mjs` PASS（`index.js 1246/1250`）。
+
 ## 0.7.8 — 2026-11-14（面板可读性与键盘可达）
 
 - **11px 灰字对比度**：`--dys-dim` 深色 `.58`→`.66`、浅色 `.62`→`.70`。11px 配 `.58` 在浅色下过不了 AA，而一屏十几处小字都靠它。
