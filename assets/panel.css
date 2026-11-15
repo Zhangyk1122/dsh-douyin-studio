@@ -104,8 +104,10 @@
 [data-dys-view]::-webkit-scrollbar-track{background:transparent;}
 /* 主人身份那一格：红绿灯 + 一句为什么。
    颜色只表状态 —— 绿=认到了，红=没认到（并说明是没填、没聊过还是重名）。 */
-[data-dys-own]{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;
-  background:var(--dys-fill2);border:1px solid var(--dys-line);}
+/* 「还没查」这块以前是个实心灰框，长得和下面的输入框一模一样 —— 用户会以为它也
+ * 是个要填的字段。改成虚线框：一眼看出「这里等你去点一下」，不是「这里等你打字」。 */
+[data-dys-own]{display:flex;align-items:center;gap:10px;padding:7px 11px;border-radius:10px;
+  background:transparent;border:1px dashed var(--dys-line2);}
 [data-dys-own][data-level="green"]{border-color:color-mix(in oklab, var(--dys-ok) 50%, var(--dys-line));
   background:color-mix(in oklab, var(--dys-ok) 9%, var(--dys-fill2));}
 [data-dys-own][data-level="red"]{border-color:color-mix(in oklab, var(--dys-bad) 50%, var(--dys-line));
@@ -123,13 +125,22 @@
   padding:4px 6px;border:0;border-radius:8px;background:transparent;color:var(--dys-dim);
   display:flex;align-items:center;justify-content:center;gap:4px;}
 [data-dys-tab]:hover{color:var(--dys-ink);}
-[data-dys-tab][data-on]{background:var(--dys-fill);color:var(--dys-ink);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.14);}
+/* tab 上的「13 项」以前和 tab 名字一样大，六个数挤在一起像正文；
+ * 压到 10px、斜体去掉，让它只当计数、不当标题。 */
+[data-dys-tab] i{font-size:10px;font-style:normal;line-height:1;opacity:.6;letter-spacing:0;}
+[data-dys-tab][data-on] i{opacity:.72;}
+[data-dys-tab][data-on]{background:var(--dys-fill);color:var(--dys-ink);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.14),inset 0 -2px 0 0 var(--dys-blue);}
 [data-dys-tab] > i{font-style:normal;font-size:10px;opacity:.5;}
 
 /* 头部：标题不缩、不换行；工具区靠右，放不下就整体掉下一行（标题被压成竖排是排版事故）。 */
 [data-dys-head]{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;min-width:0;}
 [data-dys-title]{display:flex;align-items:center;gap:7px;flex:0 0 auto;white-space:nowrap;font-size:12.5px;font-weight:600;color:color-mix(in oklab, currentColor 86%, transparent);}
-[data-dys-card][data-lead] [data-dys-title]{font-size:13.5px;font-weight:650;color:var(--dys-ink);}
+[data-dys-card][data-lead] [data-dys-title]{font-size:14.5px;font-weight:660;color:var(--dys-ink);letter-spacing:-.01em;}
+/* 卡片标题下压一条极淡的顶光：深色主题里一片同灰，眼睛没有落点。
+ * 不引新颜色，只用一条 1px 的渐变把「这张卡的标题」和「这张卡的内容」分开。 */
+[data-dys-head]{position:relative;padding-bottom:9px;margin-bottom:-3px;}
+[data-dys-head]::after{content:'';position:absolute;left:0;right:0;bottom:0;height:1px;
+  background:linear-gradient(90deg,color-mix(in oklab,var(--dys-blue) 34%,transparent),var(--dys-line) 42%,transparent);}
 [data-dys-sub]{font-size:11.5px;color:var(--dys-dim);font-weight:400;min-width:0;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 /* basis 必须是 0：auto 会拿副标题整句宽参与换行，超宽时被顶下去的是按钮。 */
@@ -148,13 +159,14 @@
 [data-dys-xs]{font-size:11px;}
 
 /* ── 头部：去渐变，头像用强调色的低透明度底 ── */
-[data-dys-hero]{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:14px;align-items:center;padding:15px 17px;border-radius:var(--dys-r);border:1px solid var(--dys-line);background:radial-gradient(120% 150% at 10% 0%, color-mix(in oklab, var(--dys-blue) 14%, transparent), transparent 60%), var(--dys-fill);}
+[data-dys-hero]{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:14px;align-items:center;padding:15px 17px;border-radius:var(--dys-r);border:1px solid var(--dys-line);background:radial-gradient(120% 150% at 8% 0%, color-mix(in oklab, var(--dys-blue) 21%, transparent), transparent 62%),radial-gradient(90% 120% at 100% 10%, color-mix(in oklab, var(--dys-teal) 9%, transparent), transparent 55%), var(--dys-fill);}
 [data-dys-ava]{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-size:16px;font-weight:650;background:color-mix(in oklab, var(--dys-blue) 22%, transparent);color:var(--dys-blue);}
 [data-dys-name]{font-size:15px;font-weight:650;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 [data-dys-pills]{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:5px;}
 [data-dys-stats]{display:flex;gap:18px;align-items:center;}
 [data-dys-stat]{display:flex;flex-direction:column;align-items:flex-end;gap:1px;min-width:52px;}
-[data-dys-stat] b{display:block;font-size:15px;font-weight:600;line-height:1.3;}
+/* 数字是这一屏唯一该被一眼看到的东西：15px 混在正文里像脚注，抬到 20px 才立得住。 */
+[data-dys-stat] b{display:block;font-size:20px;font-weight:650;line-height:1.15;letter-spacing:-.02em;}
 [data-dys-stat] span{font-size:11px;color:var(--dys-dim);}
 [data-dys-herobar]{grid-column:1 / -1;display:flex;align-items:center;gap:10px;margin-top:-2px;padding-top:10px;border-top:1px solid var(--dys-line);}
 [data-dys-herobar] > span{font-size:10.5px;letter-spacing:.06em;color:var(--dys-dim);white-space:nowrap;}
@@ -299,8 +311,8 @@
 [data-dys-check] > span{color:color-mix(in oklab, currentColor 78%, transparent);}
 /* 输入框 = 第三个表面，不能和卡片同色：以前 transparent，空框只剩一条 1px 线，
    看着像塌下去的洞。选择器加元素名是为了压住宿主对 input 的默认背景。 */
-input[data-dys-in],select[data-dys-in]{appearance:none;font:inherit;font-size:12px;line-height:1.5;padding:3px 8px;border-radius:8px;
-  border:1px solid var(--dys-line2);background:color-mix(in oklab, currentColor 6%, transparent);color:inherit;min-width:0;}
+input[data-dys-in],select[data-dys-in]{appearance:none;font:inherit;font-size:12px;line-height:1.5;padding:5px 10px;border-radius:9px;
+  border:1px solid var(--dys-line2);background:color-mix(in oklab, currentColor 9%, transparent);color:inherit;min-width:0;}
 input[data-dys-in]:focus,select[data-dys-in]:focus{outline:none;border-color:color-mix(in oklab, var(--dys-blue) 62%, transparent);
   box-shadow:0 0 0 3px color-mix(in oklab, var(--dys-blue) 16%, transparent);}
 /* 占位符用 --dys-dim：深 #919398(5.5:1)、浅 #727272(4.9:1)，两边都过 AA */
@@ -355,7 +367,7 @@ input[data-dys-in]::placeholder{color:var(--dys-dim);}
 /* 两列字段网格：刷视频这类「四个短参数」用它，标签窄一点，
  * 比原来四个只有 placeholder 的光秃输入框更容易看懂哪个是哪个。 */
 [data-dys-formgrid]{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 10px;}
-[data-dys-formgrid] [data-dys-field]{grid-template-columns:74px minmax(0,1fr);}
+[data-dys-formgrid] [data-dys-field]{display:grid;grid-template-columns:74px minmax(0,1fr);gap:8px;align-items:center;}
 [data-dys][data-cols="1"] [data-dys-formgrid]{grid-template-columns:repeat(2,minmax(0,1fr));}
 [data-dys-flabel]{font-size:11.5px;color:var(--dys-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 [data-dys-group]{grid-column:1 / -1;margin:4px 0 -2px;padding-top:6px;border-top:1px dashed var(--dys-line);

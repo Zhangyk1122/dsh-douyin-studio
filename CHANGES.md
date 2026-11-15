@@ -37,7 +37,22 @@ aweme = String(j.itemId || j.awe_id || j.aweme_id || j.item_id || '')
 
 顺带做了一套**离屏预览**（`tmp/mk-preview.mjs` + `tmp/shot-preview.mjs`）：把 `client.js` 里的 CSS 抽出来配一份手写结构，用临时标签页渲染截图 —— 改样式不用先去点开宿主面板，也不碰用户正在用的会话。
 
-**版本号先挂 0.7.19**：哥哥说界面定稿再定版，这一版只是路上的一刀。
+### C2. 界面第二刀：把「一片同灰」拆出层次
+
+哥哥看完第一刀说「界面不好看」。把宿主里的真实面板截图放大看，问题不是空，是**每一样东西都在抢同样多的注意力**：标题 13.5px、正文 13px、字段标签 11.5px，一屏看下去没有落点。八处全在 `assets/panel.css`（`client.js` 由 `build-client.mjs` 重生成，行数不变）：
+
+1. `[data-dys-title]` 13.5 → **14.5px**，字重 650 → 660，加 `letter-spacing:-.01em`。
+2. `[data-dys-head]` 加 9px 下内距，`::after` 画一条**从左到右渐隐**的 1px 线（起点带 34% 品牌蓝）。卡片标题和卡片内容从此有分界。
+3. `[data-dys-stat] b` 15 → **20px**，行高 1.15，字重 650。hero 上那三个数字（待回 / 额度剩 / 上一条回评）以前混在正文里像脚注。
+4. `[data-dys-hero]` 主渐变 14% → **21%**，右上再叠一层 9% 的青绿。深色主题下 hero 才有「这是个头部」的体量。
+5. `[data-dys-in]` / `select`：内边距 `3px 8px` → `5px 10px`、圆角 8 → 9、底色 6% → 9%。以前输入框又薄又暗，像禁用的。
+6. `[data-dys-formgrid] [data-dys-field]` 补上 `display:grid`（原来只写了 `grid-template-columns`，一旦 `display` 被上层覆盖，那条列定义就是废的）。
+7. `[data-dys-tab] i`（tab 上的「13 项」）11.5 → **10px**、去斜体、`opacity:.6`。以前六个计数和 tab 名字一样大，整行像正文。
+8. `[data-dys-own]`（「还没查」那条）从**实心灰框**改成**虚线框 + 透明底**。它以前和下面的输入框长得一模一样，用户会以为那也是要填的字段。
+
+修了预览工具一个坑：Chrome 对 `file://` 的缓存硬到「文件改了、截图字节数一模一样」。`shot-preview.mjs` 改成先开 `about:blank`、再 `Page.navigate` + `Page.reload({ignoreCache:true})`，并且开 `Network.setCacheDisabled`。
+
+**版本号先挂 0.7.19**：哥哥说界面定稿再定版，这两刀都只是路上。
 
 ---
 
