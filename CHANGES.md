@@ -206,6 +206,14 @@ README 里各留一小段 + 链接。对照表里「到底看了没」那行同�
 
 # CHANGES
 
+## 0.7.14 — 2026-11-15（主动开口接上了；mood 终于有人推）
+
+- **speakup 接线（调研 D9-A 另一半）**：`lib/speakup.mjs` 的 `decide()` 从 0.6.0 写到现在，除测试外零调用。现在 `autopilot.runSpeakup()` 接进 `runAll()`：三种由头（有人没回 / 心情激动 / 今天这段本来想说话）先过闸门（静音段、每天上限、两句冷却）→ 生成一句 → **只发给主人**（uid 优先，认不出就不发）→ 记额度 → 落 `speakup` 账（day/count/lastAt，跨天归零）。「今天这段想说话」这个由头发完就 `markDone(slot)`——一个由头不能说到额度尽。设置新增 `autoSpeakup` / `speakPerDay` / `speakCoolMin`（默认关；面板第六个开关，打开照旧要点两次）。
+- **mood 事件推动接上（D8 前置）**：`mood.note()` 也一直是零调用——四值只会往基线衰减、永远不会被事件推动，`mood.json` 基本是死的。现在回私信成功推 `dm`、回 @ 成功推 `at`、发布成功推 `share`、值班回评成功推 `reply`、主动开口推 `dm`；全部包 try，心情读坏不影响发送。
+- **顺手修两处**：① `speakupGates` 对越界时间（`25:99`）不再当成 25 点——越界等于没配，静音段不会悄悄失效（测试钉住）；② `moodLine` 的「跟哥哥很熟 / 还端着」换成中性说法（别人装上不该带着我们的称呼）。
+- 新增 `tests/speakup-run.test.mjs` 11 例（闸门转换、状态段 survives load、不该说的时候一个字节的网络都不发）。**全量 741 pass / 0 fail**；`check --quick` PASS。
+- 未真机：主动开口的第一句话要等谷时/非静音时段她自己遇上有由头的时刻（`/autopilot/run` 带 dry 可以先看由头）。
+
 ## 0.7.1 — 2026-11-13（只回主人的那一轮 + 表情私信的真实结果）
 
 - `lib/duty.mjs`：`run()/_run()` 新增 `ownerOnly`，候选里 `author_id !== ownerUid` 的直接跳过（验收用，避免扫到别人）；CLI `duty run --owner-only`。

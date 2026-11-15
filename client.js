@@ -516,6 +516,7 @@ window.__ModuleLoader__.load({
         desc: '到点给你发一条今天的账：回了多少、发了多少、还剩多少额度',
         knobs: [{ k: 'reportAt', label: '每天几点', ph: '21:30' }],
       },
+      { k: 'autoSpeakup', icon: 'send', label: '主动开口', desc: '有由头才说（刷到好玩的/今天这段想说话）；只发给你，一天有上限', knobs: [{ k: 'speakPerDay', label: '每天几句', type: 'number' }, { k: 'speakCoolMin', label: '最少隔(分)', type: 'number' }] },
     ]
 
     const Switch = ({ on, armed, onClick, title }) =>
