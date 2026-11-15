@@ -1,6 +1,6 @@
 # 现状（自动生成）
 
-> 由 `node tools/status.mjs` 生成于 2026-11-15 04:01:20（UTC）
+> 由 `node tools/status.mjs` 生成于 2026-11-15 04:33:20（UTC）
 > **本页数字不要手改** —— 要更新就重跑脚本；其它文档引用这里，不要各写一份。
 
 ## 一、体量
@@ -8,9 +8,9 @@
 | 项 | 值 |
 |---|---|
 | `client.js` | 1939 行 |
-| `index.js` | 1246 行 |
-| lib 模块 | 92 个 |
-| 测试文件 | 77 个 |
+| `index.js` | 1250 行 |
+| lib 模块 | 94 个 |
+| 测试文件 | 79 个 |
 | 受保护文件 | 7 个（`tools/protected.json`） |
 
 ## 二、验收
@@ -20,11 +20,11 @@
 ```
 抖音工作室 · 交付前自检（--quick）
 ────────────────────────────────────────────────────────────────
-✓ 语法        183 个文件都能解析
+✓ 语法        187 个文件都能解析
 ✓ 硬规矩       宿主进程无线程阻塞；白名单 3 处 CLI 同步调用已备案
 ✓ 依赖        仍然零依赖
 ✓ 不变量       守卫 / 缓存 / 异步 都还在被调用
-✓ 体量        client.js 1939/1940  index.js 1246/1250  最大 lib 742/760
+✓ 体量        client.js 1939/1940  index.js 1250/1250  最大 lib 742/760
 ✓ 测试        已跳过（--quick）
 ✓ 禁改区       7 个文件哈希未变
 ✓ 样式真源      client.js 与 assets/panel.css 一致（27912 字符）
@@ -49,6 +49,6 @@ PASS —— 可以交付
 
 ## 四、最近动作（runs.jsonl 末 60 条）
 
-- 合计 60 次，失败 9 次
-- 最近一次失败：`sticker` → - / 要给 uid（稳）、sec_uid 或昵称
-- 按动作分布：status×13、inbox×11、search×1、sticker×11、check×2、help×4、doctor×2、publish×2、engage×1、--help×1、feed×1、send:at×1、comment-at×4、tellOwner×1、see×2、episodes×3
+- 合计 60 次，失败 12 次
+- 最近一次失败：`engage` → engage-off / -
+- 按动作分布：sticker×7、help×2、publish×4、engage×1、--help×1、status×10、inbox×9、feed×1、send:at×1、comment-at×4、tellOwner×1、see×2、doctor×2、episodes×3、works×3、delete×9

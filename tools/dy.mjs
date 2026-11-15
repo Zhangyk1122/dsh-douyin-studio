@@ -955,7 +955,10 @@ try {
 		if (!title) die({ error: '缺 --title（只删标题完全匹配的那条，防止删错）' })
 		const script = join(dirname(fileURLToPath(import.meta.url)), '..', 'lib', 'delete.mjs')
 		const r = await new Promise((res) => {
-			const c = spawn(process.execPath, [script, '--title', title], {
+			/* --dry 要真的传下去：2026-11-15 之前它在这里被丢掉，delete 的 dry 名存实亡 */
+			const args = [script, '--title', title]
+			if (has('--dry')) args.push('--dry')
+			const c = spawn(process.execPath, args, {
 				env: { ...process.env, CDP_PORT: String(port()), DOUYIN_TITLE: title }, windowsHide: true,
 			})
 			let o = ''
