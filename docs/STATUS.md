@@ -1,6 +1,6 @@
 # 现状（自动生成）
 
-> 由 `node tools/status.mjs` 生成于 2026-11-15 03:12:02（UTC）
+> 由 `node tools/status.mjs` 生成于 2026-11-15 03:25:31（UTC）
 > **本页数字不要手改** —— 要更新就重跑脚本；其它文档引用这里，不要各写一份。
 
 ## 一、体量
@@ -33,10 +33,10 @@
 ✓ 工具契约      36 个工具都在 SKILL.md 里，标题上限 = 图文 ≤20 字，视频 ≤30 字
 ✓ 打包完整      13 条 files 都在，运行时该带的都带了
 ✓ 默认只读      新装默认不刷、不盯、写操作过总闸
-✓ 命令行一致     44 条命令与 HELP 一致
+✓ 命令行一致     45 条命令与 HELP 一致
 ✓ 新能力默认关    无人值守/互动都默认关，开也要过四道闸
 ✓ 提示词守则     守则在 prompts/operate.md，SKILL.md 已引用（902 字符）
-✓ 文档覆盖      44 条命令 README 里都有用法
+✓ 文档覆盖      45 条命令 README 里都有用法
 ────────────────────────────────────────────────────────────────
 PASS —— 可以交付
 ```
@@ -49,6 +49,6 @@ PASS —— 可以交付
 
 ## 四、最近动作（runs.jsonl 末 60 条）
 
-- 合计 60 次，失败 6 次
-- 最近一次失败：`feed` → - / 页面没返回内容（evaluate 拿到空）
-- 按动作分布：inbox×9、status×13、feed×4、send:at×2、comment-at×2、tellOwner×3、share×1、dm×1、search×1、sticker×11、check×2、help×4、doctor×1、publish×2、engage×1、--help×1、see×2
+- 合计 60 次，失败 9 次
+- 最近一次失败：`sticker` → - / 要给 uid（稳）、sec_uid 或昵称
+- 按动作分布：status×13、inbox×11、search×1、sticker×11、check×2、help×4、doctor×2、publish×2、engage×1、--help×1、feed×1、send:at×1、comment-at×4、tellOwner×1、see×2、episodes×3

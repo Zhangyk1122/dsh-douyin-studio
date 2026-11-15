@@ -86,3 +86,14 @@ test('planMention：四种理由各自说清楚', () => {
 	assert.equal(prefixed.text, '@辰辰辰chen 看这个')
 	assert.equal(prefixed.extra.length, 1)
 })
+
+test('@ 在正文中间时 start 跟着走，不写死 0', () => {
+	/* 以前 comment-at 里手写过一份：只要正文里出现 @ 昵称，就往开头再叠一层，
+	 * 于是发出去变成「@辰辰辰chen 前面一句 @辰辰辰chen 后面一句」——
+	 * 两个 @，extra 只认第一个，蓝字和正文错位。 */
+	const m = planMention({ text: '前面一句 @辰辰辰chen 后面一句', owner: OWNER })
+	assert.equal(m.why, 'already-in-text')
+	assert.equal(m.text, '前面一句 @辰辰辰chen 后面一句', '不许再叠一层')
+	assert.equal(m.extra[0].start, 5)
+	assert.equal(m.extra[0].end, 13)
+})

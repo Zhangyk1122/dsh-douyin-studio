@@ -118,7 +118,7 @@ const die = (o, code = 1) => { process.stdout.write(JSON.stringify(noteIfRisk({ 
 }
 
 const HELP = {
-	commands: ['status', 'sticker', 'works', 'detail', 'likes', 'notices', 'search', 'comments', 'replies', 'reply', 'delcomment', 'publish', 'quick', 'latest', 'check', 'snapshot', 'delete', 'ledger', 'cost', 'doctor', 'trend', 'queue', 'watch', 'login', 'duty', 'dm', 'share', 'names', 'inbox', 'budget', 'dm-send', 'at-reply', 'feed', 'comment-self', 'comment-at', 'comment-image', 'risk', 'see', 'watchback', 'digest', 'kill', 'schedule', 'unattended', 'engage'],
+	commands: ['status', 'sticker', 'works', 'detail', 'likes', 'notices', 'search', 'comments', 'replies', 'reply', 'delcomment', 'publish', 'quick', 'latest', 'check', 'snapshot', 'delete', 'ledger', 'cost', 'doctor', 'trend', 'queue', 'watch', 'login', 'duty', 'dm', 'share', 'names', 'inbox', 'budget', 'dm-send', 'at-reply', 'feed', 'comment-self', 'comment-at', 'comment-image', 'risk', 'see', 'watchback', 'episodes', 'digest', 'kill', 'schedule', 'unattended', 'engage'],
 	limits: LIMITS,
 	who: WHO,
 	declare: DECLARE,
@@ -279,9 +279,16 @@ try {
 		if (sub === 'send') {
 			/* 私信发一张本地表情图。--dry 只塞不回车（确认图进没进输入框）。 */
 			const { sendStickerDirect, planStickerMessage } = await import('../lib/sticker-send.mjs')
-			const { pickSticker } = await import('../lib/stickers.mjs')
+			/* `pickForContext` 从 0.6.3 就写好了（按场景定 mood：dm→soft、at/share→share），
+			 * 但一直零调用方 —— 于是「按场景挑」只是代码里的注释。现在接上：
+			 * 不给 --id 时，用 --kind 定场景、用 --text 里的词参与标签匹配，冷却降权也在里面。 */
+			const { pickSticker, pickForContext } = await import('../lib/stickers.mjs')
 			const idArg = String(argOf('--id') || '')
-			const it = idArg ? listStickers({ limit: 200 }).find((x) => x.id === idArg) : pickSticker({ mood: argOf('--mood'), tags })
+			const moodArg = argOf('--mood')
+			/* 优先级：指定 id > 指定 mood > 按场景挑（--kind dm/at/share/reply/comment） */
+			const it = idArg ? listStickers({ limit: 200 }).find((x) => x.id === idArg)
+				: moodArg ? pickSticker({ mood: moodArg, tags })
+					: pickForContext({ kind: argOf('--kind', 'dm'), text: argOf('--text', ''), tags })
 			const plan = planStickerMessage({ sticker: it, caption: argOf('--text') || '' })
 			if (!plan.ok) die({ stage: 'plan', error: plan.why })
 			const r = await sendStickerDirect({
@@ -860,11 +867,16 @@ try {
 		if (!nick) die({ error: '缺 --to（对方抖音昵称）' })
 		if (!uid || !sec) die({ error: '缺 --uid / --sec（对方的数字 uid 和 sec_uid，认人只认这两个）' })
 		if (!raw) die({ error: '缺 --text' })
-		const at = '@' + nick
-		const text = raw.startsWith(at) ? raw : at + ' ' + raw
-		/* 形状照真 @ 抄的（2026-11-03 抓哥哥手动 @ 我那条）：type 必须是 0，
-		 * 多带 nickname 反而会让服务端忽略这条 —— 之前就是这样，发出去全是纯文本。 */
-		const extra = [{ start: 0, end: at.length, type: 0, user_id: uid, sec_uid: sec, hashtag_name: '', hashtag_id: '' }]
+		/* 拼 @ 和拼 text_extra 这两步以前在这里手写了一遍，`lib/mention.mjs` 里也有一份
+		 * （planMention / mentionExtra）。手写那份把 `start` 写死成 0、只要正文里出现
+		 * `@昵称` 就往开头再叠一层 —— 两个都是错的。收敛到一处：
+		 * get 到「能不能 @」「@ 在哪」「extra 怎么拼」全由 lib 回答。 */
+		const { planMention, isRealUid } = await import('../lib/mention.mjs')
+		if (!isRealUid(uid)) die({ error: 'uid 必须是纯数字：' + uid + '（昵称会重名，认人只认 uid）' })
+		const m = planMention({ text: raw, owner: { nick, uid, secUid: sec } })
+		if (!m.extra.length) die({ error: '拼不出真的 @：' + m.why })
+		const text = m.text
+		const extra = m.extra
 		const q = budget.check({ ch: 'comment', peer: uid, thread: aweme, text })
 		if (!q.ok) die({ stage: 'budget', why: q.why, retryAfter: q.retryAfter || '', budget: q.quota.messages })
 		if (has('--dry')) {
@@ -895,6 +907,25 @@ try {
 		const all = pickReplies(n.items || [], { ownerUid: st.ownerUid || '', limit: Math.min(numOf('--max', 10), 20) })
 		const list = has('--owner-only') ? all.filter((x) => x.fromOwner) : all
 		out({ ok: true, count: list.length, items: list })
+		process.exit(0)
+	}
+
+	if (CMD === 'episodes') {
+		/* 这周发生了什么，压成三条（不是流水账）。
+		 * `lib/episodes.mjs` 0.7.2 就写好了，`weeklyEpisode()` 还会自己按周缓存到
+		 * `episodes.json`，但一直没人调 —— 于是「她记得这周干过什么」只是文件里的能力。 */
+		const { weeklyEpisode, weekKey, episodesFile } = await import('../lib/episodes.mjs')
+		const ep = weeklyEpisode({})
+		out({
+			ok: true,
+			week: ep.week || weekKey(),
+			since: ep.at ? new Date(ep.at).toISOString() : '',
+			n: ep.lines.length,
+			lines: ep.lines,
+			/* 一句话版：直接塞进提示词/面板副标题 */
+			say: ep.lines.map((x) => x.text).join('；'),
+			file: episodesFile(),
+		})
 		process.exit(0)
 	}
 

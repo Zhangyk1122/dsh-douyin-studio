@@ -1,4 +1,49 @@
-## 0.7.12 — 2026-11-15（风控闸门接上触发器 + 值班认静音）
+## 0.7.13 — 2026-11-15（人格层四个模块，三个终于接上了）
+
+调研报告里那句「人格层四模块三个零调用」不是夸张：`lib/comment-filter.mjs` 的否定语义、`lib/stickers.mjs` 的 `pickForContext`、`lib/watchback.mjs` 的 `pickReplies`、`lib/episodes.mjs`、`lib/mention.mjs` —— 全都是**写好了、测过、没人调**。这一版把它们逐个接到真出口上，每个都配了「接不上就报错」的测试。
+
+**A. 楼中楼「他说了别回」（D5-B）**
+
+`comment-filter.mjs` 新增 `DECLINE` 一组正则：`别来/别刷/别蹭/别回/不用回/不要回/别回复/勿回/无需回/不必回/少来/闭嘴/滚开`。排在 SPAM 之前（在「只有表情/符号」之后），命中就 `reply:false`，`why: '他说了别回：…'`。
+
+一个已知误判：`别来无恙啊兄弟` 会被判成「别回」。这属于**安全那一侧**（少说一句不丢人，说错一句是骚扰），注释里写明了，没有为它加例外。
+
+**B. 表情包按场景挑（D4-B）**
+
+`pickForContext` 从 0.6.3 就写好了，一直零调用方 —— 于是「按场景定 mood」（dm→soft、at/share→share、comment/reply→reply）只是代码里的注释。现在 `sticker send` 不给 `--id` 时走它：`--kind dm|at|share|reply|comment` 定场景，`--text` 里的词参与标签匹配，`rankStickers` 的冷却降权（刚用过 −3 分）也一并生效。`--mood` 仍然优先于场景。
+
+**C. 回评闭环进收件箱（D3）**
+
+`lib/watchback.mjs` 的 `pickReplies`（通知 31/32 类）本来只有 `dy watchback` 一条 CLI 用得到，收件箱里看不见 —— 别人在她评论下面接话，她永远不知道。`lib/inbox.mjs` 新增 `replyCandidates()`，`inbox()` 从三块变四块，多一个 `replied` 和 `counts.replied`；已回过的用账本 `markAnswered` 标成 `worth:false` + `blocked:['这条我已经回过']`。
+
+实测真机：`辰辰辰chen`「表演下呗小汐」（3 天前）被正确识别，`answered:true`。
+
+**顺手修的两处**
+
+- `inbox()` 从 `Promise.allSettled` 改成**串行**。四块抢的是同一个 Chrome tab，并发时实测报两条 `Runtime.enable 超时` + 一条 `lock 'cdp' 等待超时（60000ms）` —— 看着像接口坏了，其实是自己在打自己。串行慢 3 倍（约 10 秒），但每次都真拿到东西。
+- `replyCandidates` 第一版把列表字段写成 `n.list`，而 `api.notices()` 返回的是 `n.items` —— 症状是这一块**永远 0 条且不报错**。已改，并在注释里留了一句「凡是接上了但永远空的地方，先回来核字段名」。
+
+**D. 这周发生了什么（D9-B / episodes）**
+
+`lib/episodes.mjs` 的 `weeklyEpisode()` 会自动按周缓存到 `episodes.json`，但没人调。新增 `dy episodes`：输出三条带事件 id 的情节 + 一句 `say`。同时修了它自己的三个毛病：
+
+- `KIND_LABEL.publish` 原来是「发了一条作品」，拼上「2 次」变成「发了一条作品 2 次」—— 改「发了作品」。
+- `at` 原来是「@ 了哥哥」，拼出来是「这周@ 了哥哥 2 次」（半角 @ + 空格）—— 改「在评论里叫了哥哥」。
+- 失败那条只过滤 `ok:false`，没排只读命令。Chrome 卡死那阵子攒了 19 条 `status` 失败，被写成「有 19 次没成（最近一次：没说原因）」，读起来像她一直搞砸。新增 `OBSERVE` 名单（25 个只读命令），这些失败不计入情节。
+
+**E. @ 的拼法收敛到一处（D9-B / mention）**
+
+`comment-at` 里手写了一份 `@昵称` + `text_extra`，`lib/mention.mjs` 里也有一份。手写那份有两个错：`start` 写死 0、只要正文里出现 `@昵称` 就往开头再叠一层（发出去变成两个 @，蓝字和正文错位）。现在统一走 `planMention()`，另加 `isRealUid` 校验 —— uid 不是纯数字就拒，不发假 @。
+
+实测：`@` 在正文中间时 `start:5 end:13`（以前是 0/8，错位）。
+
+**F. 没改的：D6-B 停留时长**
+
+报告的判断没错，但**不适用于这个插件**：dy 的「刷视频」= `lib/feed.mjs` 拉推荐流（`gapMs` 只控拉页间隔），不真的播放。真正的停留时长在 aurabot 的 `src/douyin/duty.js` 里，属于另一个产品。
+
+---
+
+
 
 `docs/dsh-studio-重新调研报告-2026-11-15.md` 里点名最狠的一句是：**「闸门看似在位，真被撞时没人记账——比没有闸门更危险」**。说的是 0.7.0 建的 `lib/risk.mjs`：`noteRisk` / `guardedWrite` 两个函数写得挺好，除测试外**零调用方**，`risk.json` 永远是空的。
 

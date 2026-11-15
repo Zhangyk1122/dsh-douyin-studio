@@ -85,6 +85,8 @@ node tools/dy.mjs see --aweme <id> [--cells 6]  # 看一条视频：详情里的
                                               # 和 watch（盯私信）不是一回事。
 node tools/dy.mjs risk [clear]                # 风控冷却状态 / 手动解除。退避 30→60→120→360 分，
                                               # 命中 352/412/2154/3002 这类码就自动进冷却
+node tools/dy.mjs episodes                    # 这周发生了什么，压成三条（带事件 id 可回溯）。同一周
+                                              # 只算一次、落盘到 episodes.json；只读命令的失败不计入。
 
 node tools/dy.mjs kill status | on [--reason "…"] | off     # 全局停损。开着时所有会发出去的动作一律拒
 node tools/dy.mjs schedule [--days 7]         # 刷视频的排期（谷时窗口里怎么分轮）
