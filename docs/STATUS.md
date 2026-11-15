@@ -1,6 +1,6 @@
 # 现状（自动生成）
 
-> 由 `node tools/status.mjs` 生成于 2026-11-15 04:33:20（UTC）
+> 由 `node tools/status.mjs` 生成于 2026-11-15 05:27:02（UTC）
 > **本页数字不要手改** —— 要更新就重跑脚本；其它文档引用这里，不要各写一份。
 
 ## 一、体量
@@ -51,4 +51,4 @@ PASS —— 可以交付
 
 - 合计 60 次，失败 12 次
 - 最近一次失败：`engage` → engage-off / -
-- 按动作分布：sticker×7、help×2、publish×4、engage×1、--help×1、status×10、inbox×9、feed×1、send:at×1、comment-at×4、tellOwner×1、see×2、doctor×2、episodes×3、works×3、delete×9
+- 按动作分布：sticker×1、help×2、publish×4、engage×1、--help×1、status×11、inbox×10、feed×2、send:at×1、comment-at×4、tellOwner×1、see×2、doctor×3、episodes×3、works×3、delete×9、kill×2

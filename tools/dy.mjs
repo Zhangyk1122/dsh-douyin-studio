@@ -135,10 +135,16 @@ try {
 		const v = await version()
 		const tabs = v ? await listTabs() : []
 		const { isKilled, killInfo } = await import('../lib/killswitch.mjs')
+		const { readSettings } = await import('../lib/settings.mjs')
+		const { checkSettings, hasBlocker } = await import('../lib/settings-check.mjs')
+		/* 设置体检（2026-11-15）：checkSettings 一直都在，但面板没入口、doctor 也不报，
+		 * 于是「设了但不会生效」只能靠人猜。放在 doctor 里是因为它是出事时第一个跑的命令。 */
+		const issues = checkSettings(readSettings(), LIMITS)
 		out({
 			ok: Boolean(v),
 			/* 停损开着的时候，doctor 必须第一眼就看出来 —— 否则"为什么发不出去"要查半天。 */
 			kill: { on: isKilled(), info: killInfo() },
+			settings: { ok: !hasBlocker(issues), count: issues.length, issues },
 			cdp: v ? { up: true, browser: v.Browser, port: port() } : { up: false, port: port(), hint: '会自己起一个；起不来就手动开' },
 			profile: profileDir(),
 			profileExists: existsSync(profileDir()),
@@ -479,6 +485,9 @@ try {
 				aweme, cid, root, authorUid: author, text, reason, newCid: r.cid,
 				ch: 'comment', thread: root || cid, note: 'reply ' + cid,
 			})
+			/* 关系热度（2026-11-15）：回了他的评论 = 一次接触。以前 bumpHeat 零调用，
+			 * 热度永远 0、「熟人优先」等于没有。 */
+			if (author) { try { const { bumpHeat } = await import('../lib/contacts.mjs'); bumpHeat(String(author)) } catch { /* 记账失败不影响已发出的回复 */ } }
 		}
 		out({ ...r, stage: 'api', quota: stats(aweme), budget: bq.quota.messages })
 		process.exit(r.ok ? 0 : 1)
@@ -800,6 +809,15 @@ try {
 
 	/* ── 刷视频（内容限定 + 去重，只读） ──────────────────────────── */
 	if (CMD === 'feed') {
+		/* 去重表只能攒、不能清（2026-11-15）：`resetSeen()` 一直是零调用，刷久了
+		 * 会把没看过的也当成看过，而且没有任何办法重置。--reset-seen 是显式的、
+		 * 只动这一个文件的口子（不会顺手清别的账）。 */
+		if (has('--reset-seen')) {
+			const before = feed.seenStats()
+			const rst = feed.resetSeen()
+			out({ ok: rst.ok, reset: true, cleared: before.n, file: rst.file })
+			process.exit(rst.ok ? 0 : 1)
+		}
 		const csv = (s) => String(s || '').split(/[,，\s]+/).map((x) => x.trim()).filter(Boolean)
 		const allow = csv(argOf('--allow') || process.env.DOUYIN_STUDIO_KEYWORDS || '')
 		const block = csv(argOf('--block') || process.env.DOUYIN_STUDIO_BLOCKWORDS || '')
@@ -892,6 +910,18 @@ try {
 				reason: 'comment-at ' + nick, newCid: r.cid,
 				ch: 'at', thread: aweme, note: 'at ' + nick,
 			})
+			/* 主动互动记账（2026-11-15）：`engagePerDay` 和「同一个人一天只碰一次」
+			 * 全靠 engage.jsonl，而 recordEngage 一直是零调用 —— 额度永远显示满额、
+			 * 去重集合永远是空的（等于没限额）。只在碰的是白名单作者时才记，
+			 * 免得把普通回复也算成"主动互动"。 */
+			try {
+				const { authorsOf, recordEngage } = await import('../lib/engage.mjs')
+				const { readSettings: rsAt } = await import('../lib/settings.mjs')
+				const stAt = rsAt()
+				if (stAt.engageOn && authorsOf(stAt).includes(nick)) recordEngage({ author: nick, aweme, ch: 'comment-at' })
+			} catch { /* 记账失败不该把已经发出去的这条搞成失败 */ }
+			/* 关系热度：@ 了他 = 主动找他，算一次接触。以前 bumpHeat 零调用，热度恒为 0。 */
+			try { const { bumpHeat } = await import('../lib/contacts.mjs'); bumpHeat(uid) } catch { /* 同上 */ }
 		}
 		out({ ...r, stage: 'api', at: nick, text, budget: q.quota.messages })
 		process.exit(r.ok ? 0 : 1)

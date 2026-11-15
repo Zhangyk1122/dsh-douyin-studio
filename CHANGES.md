@@ -1,3 +1,69 @@
+## 0.7.18 — 2026-11-15（体检：四道闸门都在，账本没写）
+
+让体检。`node tools/check.mjs` 17 项全绿、769 例全绿、禁改区哈希未变 —— 硬指标没问题。于是扫了一遍「导出了但没人调」：**565 个导出里有 36 个零调用**。挑出四个**真会让功能失效**的接上。
+
+**A. 设置体检从「空转」变成真能报**
+
+`lib/settings-check.mjs` 的 `checkSettings()` 从 0.7.0 就在，有单测、有类型契约、**零调用**。更糟的是它按 `perDay` / `commentPerDay` 算，而 `lib/settings.mjs` 里根本没有这两个字段；`quietFrom` 是 `'22:00'` 这种字符串，`Number('22:00')` 是 `NaN` —— 所以它对着真的 `settings.json` 一条都报不出来。写好了、测过了、还查不出任何东西。
+
+重写成只认真实字段，九条检查：静音开始=结束（error）、刷着轮但每轮 0 个（error）、一天能发多少条超 24（warn）、私信+@ 一晚上超 5 次（warn）、主动互动开着但白名单空（error）、无人值守开着但只存草稿（warn）、无人值守+公开（warn）、静音段与低峰窗口重叠（info）、有额度但没配主人（warn）。
+
+接进 `dy doctor`（出事时第一个跑的命令）：
+
+```
+"settings": { "ok": true, "count": 0, "issues": [] }
+```
+
+**这里我第一版写错了方向**：按「每轮 2 条 × 48 轮 = 96」报出「一天能发 100 条」，看着像个漏洞。但真正拦在前面的是 `lib/budget.mjs` 的日上限（`LIMITS.perDay = 20`）—— 96 > 20 时是日上限先断，那是正常设计。已改成反过来报：**轮次根本给不了那么多条时才算空头支票**（每轮 2 条 × 每 12 小时 1 轮 = 4 条，上限却写 20 → 那 20 条永远吃不到）。
+
+这台机器的真实设置体检查出 **0 条** —— 它的配置本来就没打架。虚惊一场，但「能报出东西」这件事本身就说明接线是通的（测试里两条正反用例钉着）。
+
+`tests/risk-label.test.mjs` 那三条按旧字段写的测试同步改成真实字段（旧断言等于给「空转」盖章）。
+
+**B. 互动记账接上（`engagePerDay` 以前是空头支票）**
+
+`recordEngage()` 零调用 → `engage.jsonl` 永远是空 → `usedToday().count` 永远是 0 → `engagePerDay: 3` 永远显示满额，「同一个人一天只碰一次」也永远失效（去重集合同样是空的）。
+
+接在 `comment-at` 真发成功之后，**只在碰的是白名单作者时**记（免得把普通回复也算成主动互动）：
+
+```js
+const { authorsOf, recordEngage } = await import('../lib/engage.mjs')
+if (stAt.engageOn && authorsOf(stAt).includes(nick)) recordEngage({ author: nick, aweme, ch: 'comment-at' })
+```
+
+实测（临时 HOME，不碰生产数据）：记账前 `used 0` → 记两条后 `used 2 / authors ["大地矿业（CDD MINING)"]` → 额度设 1 条时 `planEngage` 正确回 `quota / 今天的互动额度用完了（2/1）`。
+
+**C. 关系热度能涨了（并且表空时会先建脸）**
+
+`bumpHeat()` 零调用 → `contacts.json` 的 `heat` 恒为 0。接在 `comment-at` / `reply` 成功之后。
+
+但只接线不够：`bumpHeat` 原来「不在表里就直接 `return null`」，而这张表只由 `remember()`（duty 读到他说的话时）填充 —— 没跑过 duty 的号表是空的，热度还是永远 0。改成「回过就是认识」：不在表里先建一张最小的脸（没有原话，`summaryFor()` 仍返回 `''`，不会编），再 +1。
+
+实测：两次 `bumpHeat` → `heatOf(profileOf(uid)) = 1.9999…`。
+
+**D. 去重表能清了**
+
+`resetSeen()` 零调用 → 「看过的视频」只能攒不能清，刷久了会把没看过的当成看过，而且没有任何重置办法。
+
+`dy feed --reset-seen`（只动 `feed-seen.json` 一个文件，不顺手清别的账）：
+
+```
+{"ok":true,"reset":true,"cleared":231,"file":"C:\\Users\\admin\\.dsh\\douyin-studio\\feed-seen.json"}
+```
+
+**没做的两件事（写清原因，免得下次又当成遗漏）**
+
+- `lib/notify.mjs` 的 `allowNotify()`（打分 + 配额 + tier 上限 + 静音一起判）仍然零调用 —— 实际决定发不发的是 `index.js:326` 的 `pickTier`。要换掉它得动 `index.js`，而那个文件 **1250/1250 顶格**，改一行就超。等拆完文件再说。
+- `lib/sticker-send.mjs` 的 `stageStickerDm`、`lib/watch.mjs` 的 `cachedWatch` / `resetWatchCache` 虽然零调用，但**测试在用**（`tests/sticker-send.test.mjs` 5 处、`tests/watch.test.mjs` 各 4 处）—— 删它们等于删覆盖，收益不值。
+
+---
+
+## 0.7.17 — 2026-11-15（发布真机 + delete 四连修）
+
+（这个版本由哥哥那边的会话提交，条目见该提交。）
+
+---
+
 ## 0.7.13 — 2026-11-15（人格层四个模块，三个终于接上了）
 
 调研报告里那句「人格层四模块三个零调用」不是夸张：`lib/comment-filter.mjs` 的否定语义、`lib/stickers.mjs` 的 `pickForContext`、`lib/watchback.mjs` 的 `pickReplies`、`lib/episodes.mjs`、`lib/mention.mjs` —— 全都是**写好了、测过、没人调**。这一版把它们逐个接到真出口上，每个都配了「接不上就报错」的测试。

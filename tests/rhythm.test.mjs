@@ -56,7 +56,12 @@ test('老数据没有 heat 字段也不炸', () => {
 	const u = C.profileOf('u2')
 	assert.equal(u.heat, 0)
 	assert.equal(C.heatOf(u), 0)
-	assert.deepEqual(C.bumpHeat('nobody'), null)
+	/* 2026-11-15 改：以前不在表里返回 null，于是「我回过他」这件事只有在 duty 的
+	 * remember 先把脸建起来之后才算数 —— 没跑过 duty 的号，热度永远 0。
+	 * 现在回过就是认识：先建一张最小的脸（没有原话），再 +1。 */
+	const made = C.bumpHeat('nobody')
+	assert.ok(made && made.heat === 1, '不在表里也要建脸并记一次')
+	assert.equal(C.summaryFor('nobody'), '', '没有原话就一个字都不许编')
 })
 
 test.after(() => rmSync(home, { recursive: true, force: true }))

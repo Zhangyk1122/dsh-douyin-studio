@@ -31,21 +31,33 @@ test('打标：没配命令就明说 no-vision', () => {
 	assert.equal(r.reason, 'no-vision')
 })
 
-test('设置校验：日上限吃不到时给 warn', () => {
-	const w = checkSettings({ perDay: 20, replyMaxPerRound: 2, scanRounds: 2 })
+/* 2026-11-15：checkSettings 重写过 —— 旧版按 perDay/commentPerDay 算，而真实设置里
+ * 根本没有这两个字段，`Number('03:00')` 又是 NaN，所以它对着真的 settings.json 一条都
+ * 报不出来。下面三条改成按真实字段验（replyMaxPerRound / dutyEveryMin / scanPerRound）。 */
+test('设置校验：轮次给不了那么多条，日上限就是空头支票', () => {
+	/* 每轮 2 条 × 每 12 小时 1 轮 = 4 条，上限却写 20 → 那 20 条永远吃不到 */
+	const w = checkSettings({ replyMaxPerRound: 2, dutyEveryMin: 720 }, { perDay: 20 })
 	assert.equal(w[0].level, 'warn')
-	assert.match(w[0].msg, /20/)
+	assert.match(w[0].msg, /吃不到/)
 })
 
-test('设置校验：高于 24 条/天给 warn；静音同名给 error', () => {
-	const w = checkSettings({ perDay: 40, replyMaxPerRound: 2, scanRounds: 30, quietFrom: 3, quietTo: 3 })
-	assert.ok(w.some((x) => /偏多/.test(x.msg)))
-	assert.ok(w.some((x) => x.level === 'error'))
+test('设置校验：轮次够给、日上限先断——不报（这是正常设计，别虚惊）', () => {
+	/* 每轮 2 条 × 每 30 分钟 1 轮 = 96 条，上限 20 → 20 先断，不是矛盾 */
+	assert.deepEqual(checkSettings({ replyMaxPerRound: 2, dutyEveryMin: 30 }, { perDay: 20 }), [])
+})
+
+test('设置校验：静音同名给 error；刷着轮但每轮 0 个也报', () => {
+	const w = checkSettings({ replyMaxPerRound: 1, dutyEveryMin: 120, quietFrom: '03:00', quietTo: '03:00', scanRounds: 4, scanPerRound: 0 })
+	assert.ok(w.some((x) => x.level === 'error' && x.field === 'quiet'), '静音开始=结束必须是 error')
+	assert.ok(w.some((x) => x.level === 'error' && x.field === 'scanPerRound'), '每轮 0 个等于空转')
 	assert.equal(hasBlocker(w), true)
 })
 
 test('设置校验：正常配置不报警', () => {
-	assert.deepEqual(checkSettings({ perDay: 6, replyMaxPerRound: 2, scanRounds: 4, dutyEveryMin: 60 }), [])
+	assert.deepEqual(
+		checkSettings({ replyMaxPerRound: 1, dutyEveryMin: 120, sharePerDay: 1, atPerDay: 1, scanRounds: 0, ownerUid: '1' }, { perDay: 6 }),
+		[],
+	)
 })
 
 test('表情挑选：刚发过的降权，换一张', () => {
