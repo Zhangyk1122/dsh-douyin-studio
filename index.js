@@ -22,6 +22,7 @@ import * as AUTOPILOT from './lib/autopilot.mjs'
 import * as OWNER from './lib/owner.mjs'
 import { execJson } from './lib/proc.mjs'
 import { checkOrigin } from './lib/guard.mjs'
+import { feedAdjust, moodSnapshot } from './lib/mood.mjs'
 import { serveInbox, DEFAULT_TTL } from './lib/cache.mjs'
 import { readSettings, writeSettings, settingsEnv, DEFAULTS } from './lib/settings.mjs'
 import * as BUDGET from './lib/budget.mjs'
@@ -434,7 +435,10 @@ export function apply(ctx, config) {
 				const csv = (s) => String(s || '').split(/[,，\s]+/).map((x) => x.trim()).filter(Boolean)
 				/* 「每轮看几个」是用户视角的数字；feed 内部自己按条数反推翻几页，
 				 * 用户不用再理解 count / rounds 两层参数。每条之间歇 scanGap 秒。 */
-				const n = Math.min(Math.max(Number(st.scanPerRound) || 20, 1), 50)
+				const n0 = Math.min(Math.max(Number(st.scanPerRound) || 20, 1), 50)
+				/* 心情接进刷视频（D8）：没力气少刷、精神足多看。只改数量，不改内容。 */
+				const adj = feedAdjust(moodSnapshot(), n0)
+				const n = adj.perRound
 				/* 每轮之间不用同一个秒数：固定 6 秒滚一整晚，比随机更像脚本。 */
 				const gap = Math.max(0, Math.round((Number(st.scanGap) || 0) * (0.7 + Math.random() * 0.6)))
 				/* 选题也能走搜索：feed 是算法给的，search 是关键词找的。

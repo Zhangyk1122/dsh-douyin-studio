@@ -206,6 +206,12 @@ README 里各留一小段 + 链接。对照表里「到底看了没」那行同�
 
 # CHANGES
 
+## 0.7.16 — 2026-11-15（心情接进刷视频和回复长短；表情包有了语义检索）
+
+- **D8 落地（心情的消费面）**：`lib/mood.mjs` 新增 `feedAdjust()` 与 `moodPaceLine()` 两个纯函数——精力 <0.3 每轮刷片对半（至少 1 条）、>0.75 多看两条（封顶 50）；精力低回短点、足多接半句。接进三处：`index.js` 的刷视频轮量、`duty` 的回评提示词、`autopilot` 的私信/@ 提示词。**边界写死在注释里**：只改「量」，不改事实、不写进正文、不展示数值——心情是状态，不是演技。
+- **表情包语义检索（调研 D4 的 A 档剩余）**：新增 `lib/tok.mjs`（中文二元切分 + 英文按词，零依赖）和 `lib/sticker-search.mjs`（BM25）。`rankStickers` 新增 `query` 参数：对方那句话/附言走语义检索，得分归一化到 0–1.5 并进总分——**语义是加成，不是取代**（心情 2 分仍压得过语义 1.5 分，测试钉住）；`pickForContext` 把 `--text` 同时喂给标签匹配（原行为）和语义检索（新路）。检索自己坏掉时挑图照旧工作。
+- 新增 `tests/mood-consume.test.mjs` 6 例、`tests/sticker-search.test.mjs` 11 例。**全量 769 pass / 0 fail**；`check --quick` PASS。
+
 ## 0.7.15 — 2026-11-15（回复节奏：从自己的动作账学，不再按字数演）
 
 - **D7-A 落地**：`lib/rhythm.mjs` 新增 `gapsOf()` / `empiricalPace()` / `learnPace()`——从 `runs.jsonl` 里相邻两次**发送**（dm/reply/comment-at/at/tellOwner/share/send:at/speakup）的间隔学一个「回复停顿」：剔掉睡觉跨度（>4h）和重复记账（<3s），取 p10–p90 中段随机取样，钳在 [2s, 90s]；样本不足 20 条返回 null（认输，不拍常数）。`humanDelay()` 新增 `pace` 参数：学到了用学到的，没学到才按字数估——按字数等一会儿本质是「演」一个打字的人，QQ 侧早就否过（2026-10-27 陈汐原话）。`learnPace()` 带 60 秒缓存，一轮值勤回好几条不重读账本。
