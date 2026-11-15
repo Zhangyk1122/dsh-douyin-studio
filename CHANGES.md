@@ -1,3 +1,44 @@
+## 0.7.11 — 2026-11-15（真的能看视频了：`dy see`）
+
+以前说「抽帧」是个空承诺 —— `lib/frames.mjs` 从 0.6.2 就在，但**没有任何调用方**，`lib/watch.mjs` 里那句 `frames: false` 一直诚实到底。现在接上了。
+
+**做法**：详情接口里本来就带播放直链，不用另外解析 `a_bogus`、不用下载整片、不用开浏览器抓包。
+`/aweme/v1/web/aweme/detail/` → `video.play_addr_h264.url_list[0]` → 直接喂 ffmpeg → 一张 3×2 拼图。
+
+```
+node tools/dy.mjs see --aweme 7685956210915362489
+→ 15 秒、30.9 万赞、3353 条评论；拼图 47 KB，六格每格 2.5 秒
+```
+
+**两个非踩不可的坑**
+- **抖音 CDN 不认 ffmpeg 的默认 UA**。`v26-web.douyinvod.com` 节点直接 `403 Forbidden`，而同一时刻 `v11-weba` 是通的 —— 同一个接口，`url_list` 里三条 CDN，踩中哪条是随机的。修法：`-user_agent <Chrome UA> -referer https://www.douyin.com/`，且这两个必须在 `-i` **之前**（是 input option）。加完三条 CDN 全通。
+- **均匀采样会正好卡在转场**。`fps=n/d` 取的是每格的**格首**，一条 6 镜头的片子有一半格子里是半透明的过渡帧（实测第 2 格几乎全白）。修法：`fps=…:start_time=<每格 30% 处>`。0.5 会越过片尾黑场（实测第 6 格变黑），0.3 两头都躲开。
+
+**改了什么**
+- `lib/watch.mjs`：`watchOnce(id, { frames: true })` 才抽帧。**默认不抽** —— 刷推荐一轮十几条，每条都解码一遍纯属浪费。抽过的带 `sheet` / `cells` / `grid` / `secPerCell` / `sheetBytes`；没抽到就是 `frames: false` + `frameError`，绝不假装看过。抽帧版的缓存 key 单独一条（`id#frames`），否则第二次要图时拿到的是 `frames:false` 的旧账。
+- `lib/watch.mjs`：新增 `framesDir()`（落在数据目录 `~/.dsh/douyin-studio/frames`，不塞进仓库）和 `gridOf(cells)`（6→3×2、9→3×3、12→4×3、16→4×4、20→5×4）。
+- `lib/frames.mjs`：`grabFrames` 支持 `cols/rows`（长视频不止要 6 格）；`tileFilter` 加 `phase` 参数；导出 `UA` / `REFERER`。
+- `tools/dy.mjs`：新增 `see` 命令（**不是** `watch` —— `watch` 是盯私信的常驻开关，两个东西别混）。
+- `lib/api.mjs`（**禁改区，理由记这里**）：`projAweme` 补 `play_url` / `width` / `height` / `ratio`。直链本来就在 detail 返回里，以前被投影丢掉了，等于白拿一个请求。已跑 `node tools/lock-protected.mjs` 重刷 md5。
+- `tests/watch.test.mjs`（原有 6 例不动）加 4 例：`gridOf` 各档映射、格子数与声明对得上、`watchOf` 把 `play_url`/`size` 折进来（没带就是空串，不挂假路径）、`TTL` 是 30 分钟。
+
+**仍然是故意的**：这个模块**不产出观后感**。它只给图片和事实，描述必须由真的打开那张图的调用方写（agent 的 `read_image`，或配了 `DOUYIN_STUDIO_VISION_CMD` 的视觉通道）。返回里带一句 `next` 说明下一步该看哪张图、按什么顺序说、看不清的格子要承认看不清。
+
+**顺手做的：README 瘦身**（用户说 GitHub 上那份太长）
+
+349 行 / 25 KB → **243 行 / 7.2 KB**。拆法不是删内容，是分位置：
+- 命令明细（65 行）→ `docs/COMMANDS.md`
+- 设置页数据接口 + 两条硬规矩 + 自主执行 + 面板设计规矩（72 行）→ `docs/INTERNALS.md`
+- 无人值守 / 主动互动 / 谷时窗口（47 行）→ `docs/AUTOPILOT.md`
+- publish-cli 能力表 + 三个真机坑（26 行）→ 并进 `docs/PUBLISH.md`
+- 删掉「它和 dsh-douyin-scroll 的区别」（19 行历史包袱，那个插件已停用）
+
+README 里各留一小段 + 链接。对照表里「到底看了没」那行同步改成现在的事实（`dy see` 真抽帧了，
+但描述仍要由看过图的人写）。`check.mjs` 的「文档覆盖」守卫改成读 README + `docs/*.md` 合起来算，
+命令挪走不会漏检。
+
+测试 **724 pass / 0 fail**；`check.mjs` PASS（`client.js 1938/1940  index.js 1246/1250`，44 条命令 README 全覆盖）。
+
 ## 0.7.10 — 2026-11-15（访问检查改成维护者原话的写法）
 
 - 0.7.9 里我怕「硬依赖会把插件卡成 pending」，用了运行时 `Reflect.get(ctx, 'connection')`。翻回 PR #14983 的原话，他要的是「**在 handler 入口调用 `ctx.connection.requestRejection(req)`**」—— 那就该照官方写：`inject` 里声明 `'connection'`，handler 里直接用 `ctx.connection.requestRejection(req)`。

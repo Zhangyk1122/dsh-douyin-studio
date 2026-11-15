@@ -98,7 +98,7 @@ const die = (o, code = 1) => { process.stdout.write(JSON.stringify({ ok: false, 
 }
 
 const HELP = {
-	commands: ['status', 'sticker', 'works', 'detail', 'likes', 'notices', 'search', 'comments', 'replies', 'reply', 'delcomment', 'publish', 'quick', 'latest', 'check', 'snapshot', 'delete', 'ledger', 'cost', 'doctor', 'trend', 'queue', 'watch', 'login', 'duty', 'dm', 'share', 'names', 'inbox', 'budget', 'dm-send', 'at-reply', 'feed', 'comment-self', 'comment-at', 'comment-image', 'risk', 'watchback', 'digest', 'kill', 'schedule', 'unattended', 'engage'],
+	commands: ['status', 'sticker', 'works', 'detail', 'likes', 'notices', 'search', 'comments', 'replies', 'reply', 'delcomment', 'publish', 'quick', 'latest', 'check', 'snapshot', 'delete', 'ledger', 'cost', 'doctor', 'trend', 'queue', 'watch', 'login', 'duty', 'dm', 'share', 'names', 'inbox', 'budget', 'dm-send', 'at-reply', 'feed', 'comment-self', 'comment-at', 'comment-image', 'risk', 'see', 'watchback', 'digest', 'kill', 'schedule', 'unattended', 'engage'],
 	limits: LIMITS,
 	who: WHO,
 	declare: DECLARE,
@@ -618,6 +618,25 @@ try {
 	}
 
 	/* ── 盯梢：来新私信就弹通知 ───────────────────────────────────── */
+	/* ── 看一条视频：抽成拼图，把证据摆出来（2026-11-15）─────────────
+	 * 和 `watch` 不是一回事：`watch` 是盯私信的常驻开关，`see` 是「我现在要看这一条」。
+	 * 抽帧只产出图片和事实，**不产出观后感** —— 描述必须由真的看过那张图的调用方写。 */
+	if (CMD === 'see') {
+		const mod = await import('../lib/watch.mjs')
+		const id = String(argOf('--aweme') || '').trim()
+		if (!id) die({ error: '要 --aweme（作品 id）' })
+		const w = await mod.watchOnce(id, { frames: true, cells: numOf('--cells', 6) })
+		const { playUrl, ...rest } = w
+		out({
+			...rest,
+			playUrlLen: String(playUrl || '').length,
+			next: w.frames
+				? '下一步：read_image 打开 sheet，按格子顺序（左上→右下）一格一句话说你看到什么，再谈感受。没看清的格子说没看清，别补。'
+				: '没抽到画面（' + (w.frameError || '未知') + '）。只能凭文案和热评说话，别编画面。',
+		})
+		process.exit(0)
+	}
+
 	if (CMD === 'watch') {
 		const mod = await import('../lib/watch.mjs')
 		const act = String(argv[1] || 'once')

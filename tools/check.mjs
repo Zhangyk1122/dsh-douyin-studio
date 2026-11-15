@@ -384,7 +384,10 @@ if (QUICK) {
 	const src = readFileSync(join(ROOT, 'tools', 'dy.mjs'), 'utf8')
 	const help = (src.match(/commands:\s*\[([^\]]+)\]/) || [, ''])[1]
 	const listed = [...new Set([...help.matchAll(/'([a-z-]+)'/g)].map((m) => m[1]))]
-	const readme = readFileSync(join(ROOT, 'README.md'), 'utf8')
+	const readme = readFileSync(join(ROOT, 'README.md'), 'utf8') + '\n'
+		/* README 只留高频路径，命令明细拆到 docs/COMMANDS.md —— 两边合起来才算「用户看得见」 */
+		+ readdirSync(join(ROOT, 'docs')).filter((f) => f.endsWith('.md'))
+			.map((f) => readFileSync(join(ROOT, 'docs', f), 'utf8')).join('\n')
 	const missing = listed.filter((c) => !new RegExp('dy\\.mjs\\s+' + c.replace(/-/g, '\\-') + '(?![a-z-])').test(readme))
 	const issues = []
 	if (listed.length < 30) issues.push('只认出 ' + listed.length + ' 条命令，HELP 写法可能变了')
