@@ -43,7 +43,7 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 const CLI = join(HERE, 'tools', 'dy.mjs')
 
 export const name = 'douyin-studio'
-export const inject = ['tools', 'webServer']
+export const inject = ['tools', 'webServer', 'connection']
 
 /** 🔴 每个字段都要 `.extra('volatile', true)`，否则 settings.update() 会抛「没有 volatile 字段」 */
 export const Config = !z ? undefined : z.object({
@@ -536,9 +536,8 @@ export function apply(ctx, config) {
 				try {
 					const url = new URL(req.url || '/', 'http://127.0.0.1')
 					const p = url.pathname.replace(/^\/api\/douyin-studio/, '') || '/'
-					/* 🔴 访问检查（2026-11-15，市场维护者提的）：lib/guard.mjs 挡得住 cross-site，挡不住「本机另一个进程」。DSH 的 connection 服务有更硬一层 —— Host/Origin 栅栏（防 DNS rebinding）+ 浏览器登录 cookie；官方 dsh-host-open-in-app 路由开头都先问它。故意不写进 inject：那是硬依赖，缺服务会把插件卡成 pending；这里拿到就用、拿不到退回 guard。 */
-					const conn = Reflect.get(ctx, 'connection')
-					const rej = conn && typeof conn.requestRejection === 'function' ? conn.requestRejection(req) : 0
+					/* 🔴 访问检查（2026-11-15，市场维护者 fkysly 在 PR #14983 合并时要求的原话：「在 handler 入口调用 ctx.connection.requestRejection(req)」）。lib/guard.mjs 挡得住 cross-site，挡不住「本机另一个进程」；connection 给的是两道更硬的门 —— Host/Origin 栅栏（Host 必须是 loopback/绑定地址，sec-fetch-site: cross-site 直接 403，防 DNS rebinding）+ 浏览器登录 cookie（401）。写法照官方 dsh-host-open-in-app 的 rejected()。 */
+					const rej = ctx.connection && typeof ctx.connection.requestRejection === 'function' ? ctx.connection.requestRejection(req) : 0
 					if (rej) return sendJson(res, rej, { ok: false, stage: 'auth', error: '请求没过 DSH 的访问检查（' + rej + '）', hint: '面板从 DSH 里打开；命令行用 dy 工具，别直接打 HTTP' })
 					/* 跨站兜底（白名单场景）；非 GET 必须 application/json —— 表单提交是唯一不需要预检的 CSRF 形态。 */
 					const guard = checkOrigin(req.headers)

@@ -1,3 +1,11 @@
+## 0.7.10 — 2026-11-15（访问检查改成维护者原话的写法）
+
+- 0.7.9 里我怕「硬依赖会把插件卡成 pending」，用了运行时 `Reflect.get(ctx, 'connection')`。翻回 PR #14983 的原话，他要的是「**在 handler 入口调用 `ctx.connection.requestRejection(req)`**」—— 那就该照官方写：`inject` 里声明 `'connection'`，handler 里直接用 `ctx.connection.requestRejection(req)`。
+- 已核实这个服务确实挂在 ctx 上：`dsh-client-connection/lib/index.js:692` `var HostConnectionService = class extends Service`，`:710` `super(ctx, "connection")` —— cordis 的 `Service` 基类构造时就 provide 了；它跟 `webServer` 一样是 GUI 的基础设施，不存在「装了但没有」的情况。
+- 仍留 `typeof ... === 'function'` 兜底：服务在、方法不在时退回 `lib/guard.mjs`，不会把面板打挂。
+- 其余不变：非 GET 必须 `Content-Type: application/json`（415 挡回），`guard.mjs` 继续管白名单 / 反向代理场景。
+- 测试 **720 pass / 0 fail**；`check.mjs` PASS（`index.js 1246/1250`）。
+
 ## 0.7.9 — 2026-11-15（补 DSH 的访问检查：市场维护者合并时提的那条）
 
 - **以前只有自己写的 Origin 判断**（`lib/guard.mjs`）：能挡 `sec-fetch-site: cross-site`，挡不住「同一台机器上另一个进程」。维护者 fkysly 在 PR #14983 合并时，把这条写进了插件描述里。
