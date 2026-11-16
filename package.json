@@ -1,6 +1,6 @@
 {
   "name": "dsh-douyin-studio",
-  "version": "0.7.19",
+  "version": "0.7.20",
   "description": "小汐的抖音工作室：收件箱、自主执行（自己回私信/发作品/报平安）、消息预算、刷视频和一页能调规矩的面板。引擎在 lib/，工具只做参数整形。",
   "type": "module",
   "main": "index.js",
@@ -36,8 +36,16 @@
     "cdp"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dbbdbdhdbxb-design/dsh-douyin-studio.git"
+  },
+  "homepage": "https://github.com/dbbdbdhdbxb-design/dsh-douyin-studio#readme",
+  "bugs": {
+    "url": "https://github.com/dbbdbdhdbxb-design/dsh-douyin-studio/issues"
+  },
   "engines": {
-    "node": ">=20"
+    "node": "^22.19.0 || >=24.0.0"
   },
   "peerDependencies": {
     "@deepseek-ai/schemastery": "*",

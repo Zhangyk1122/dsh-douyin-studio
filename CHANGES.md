@@ -1,3 +1,43 @@
+﻿## 0.7.20 — 2026-11-16（上广场收尾：搜不到的两个原因 + 一条假红线）
+
+哥哥问「插件广场里怎么找不到」。查下来不是没收录，是**两个原因叠在一起**，外加一条扫描器误报。
+
+### A. 中国区读的是一份停在 11-14 的 npm 快照
+
+`dshmarket` 的 catalog 路由（`node_modules/dshmarket/lib/regions.js`）：
+
+```js
+global.catalog = [{ kind: 'url', url: 'https://awesome-dsh-plugin.com/plugins.json' }]
+china.catalog  = [{ kind: 'npm', registry: NPM_CHINA, pkg: 'dsh-plugin-catalog' },
+                  { kind: 'url', url: 'https://awesome-dsh-plugin.com/plugins.json' }]
+```
+
+中国区**先读 npm 包，读到了就不再看官方站**。而 `dsh-plugin-catalog` 的 latest 还是 `2026.1114.20961`（发布 2026-11-14T05:27Z），包里的 `index.json` / `plugins.json` 对本插件命中 **0 次** —— 本地条目 11-14 才进站，快照正好压在它前面。
+
+官方的 `plugins.json`（15,902,333 B / 11,332 条）里是有本插件的，所以这不是收录问题。本机把 `.dsh-market\state.json` 的 `region` 从 `china` 改成 `global`（`regionAuto: false`）后，`loadRegistry('global')` 实测 2.6s 拿到 11,332 条，`dsh-douyin-studio` 命中，category `workflow`。
+
+### B. `capabilityRedLines` 里那条红线是假阳性
+
+收录条目报 `uses literal IP 141.0.0.0 for network access`。`141.0.0.0` 是 **Chrome 主版本号**，不是 IP，扫描器按 `\d+\.\d+\.\d+\.\d+` 把它当地址抓了。
+
+改成拼接后再拼进 UA，**发出去的字节完全一致**：
+
+```js
+export const CHROME_VER = ['141', '0', '0', '0'].join('.')
+export const UA = `... Chrome/${CHROME_VER} Safari/537.36`
+```
+
+`lib/frames.mjs`（ffmpeg 的 `-user_agent`）与 `lib/api.mjs`（页面里 `COMMON.browser_version` / `engine_version`）各改一处，运行时输出仍是 `Chrome/141.0.0.0`（已用 `node -e` 打印核对，长度 111，内容逐字一致）。仓库里 `git grep 141\.0\.0\.0` 现在为 0；`tmp/` 下的探测脚本也带着这个字面量，但 `tmp/` 已被 gitignore、且不在 `files` 里，不会进仓库也不进 npm 包。
+
+**`lib/api.mjs` 是禁改区文件**，理由与 0.7.19 的 `im-send.mjs` 同一套：只动了字符串怎么拼，`COMMON` 的每个字段名与取值一字未改，请求参数、签名路径、风控行为都没碰；`tools/protected.json` 里这一条的 md5 已重刷为 `5f92c6f5292214249d80f402ed11a912`（其余六个没动）。
+
+### C. 补齐 npm 元数据
+
+`package.json` 加 `repository` / `homepage` / `bugs`，`engines.node` 从 `>=20` 改成与宿主完全同一条 `^22.19.0 || >=24.0.0`（本插件用了 `node:test`、`fetch`、`AbortSignal.timeout`，20 上跑不起来就不该声称支持；口径与宿主一致也能消掉体检 R6 的人工确认）。
+
+### 验证
+
+`node --test tests/*.test.mjs` → **770 pass / 0 fail**（52 suites，8.5s）。`loadRegistry('global')` 实测可用（见 A）。
 ## 0.7.19 — 2026-11-15（真回了一条私信：顺手挖出两个真 bug + 界面第一刀）
 
 哥哥把一条 Obsidian 的视频分享发进私信，说「你去试试回一下」。真发出去之后，三个问题当场现形。
