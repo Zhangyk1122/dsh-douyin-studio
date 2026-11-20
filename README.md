@@ -1,4 +1,4 @@
-# dsh-douyin-studio（fork）
+# dsh-douyin-studio-zk（fork）
 
 一个跑在 [DeepSeek Harness](https://github.com/deepseek-ai) 里的抖音工作台：看作品、评论、私信、通知，回评、发图文和视频、盯私信、看数据趋势，并且**能看懂 @ 它的视频和图文**。
 
@@ -29,7 +29,7 @@
 
 ```bash
 # 从本 fork 安装
-dsh plugin --profile desktop add "dsh-douyin-studio@github:Zhangyk1122/dsh-douyin-studio"
+dsh plugin --profile desktop add "dsh-douyin-studio-zk@github:Zhangyk1122/dsh-douyin-studio"
 ```
 
 或克隆后本地 link：

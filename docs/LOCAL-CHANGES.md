@@ -1,3 +1,5 @@
+> **包名已改为 `dsh-douyin-studio-zk`**（避免与上游 `dsh-douyin-studio` 在插件市场重名）。安装用 `dsh-douyin-studio-zk@github:Zhangyk1122/dsh-douyin-studio`。
+
 # dsh-douyin-studio local patches (exported 2026-11-19)
 
 > 本文件用 ASCII 文件名（LOCAL-CHANGES.md），避免 macOS 解压时中文名乱码。

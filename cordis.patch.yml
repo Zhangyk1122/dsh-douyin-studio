@@ -12,7 +12,7 @@
 
 - insert:
     - id: douyin-studio          # ⭐ 必须等于命名空间名（设置页 volatile 写入的前提）
-      name: dsh-douyin-studio
+      name: dsh-douyin-studio-zk
       config:
         cdpPort: 9334
         profileDir: ""
