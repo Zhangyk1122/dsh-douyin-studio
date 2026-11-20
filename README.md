@@ -44,21 +44,27 @@ dsh plugin --profile desktop add link:$PWD
 
 ## 视频理解（本 fork 新增，可选）
 
-douyin_studio_video_understand 依赖外部 [video-watch-plus](https://github.com/xinhailaopo/video-watch-plus)，装好后配环境变量：
+video-watch-plus 已**打包进本仓库**（vendor/video-watch-plus/，MIT），不用再单独 clone。只差外部环境：ffmpeg + 一个带 faster-whisper 的 python。环境变量：
 
 | 变量 | 说明 |
 |---|---|
-| VW_DIR | video-watch-plus 仓库目录（含 vendor/vw.py 与 scripts/） |
+| VW_DIR | 可选。默认用插件自带的 vendor/video-watch-plus，一般不用设 |
 | VW_PYTHON | 装了 faster-whisper（1.2.x）+ numpy + Pillow + av<19 的 python |
 | VW_FFMPEG | ffmpeg 路径（含 scdet/freezedetect/drawtext 的完整构建） |
 | VW_FFPROBE | ffprobe 路径（可选，缺了 video-watch-plus 会用不了） |
 | HF_HOME | faster-whisper 模型缓存目录 |
 
-Windows 一键装（在 video-watch-plus 仓库里）：
+Windows 上只需装两样东西（一次性）：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts\setup-windows.ps1 -VwPy vendor\vw.py
+# 1) ffmpeg（含 ffprobe，完整构建）：winget install ffmpeg  或从 gyan.dev 下载
+# 2) python venv + faster-whisper
+python -m venv .venv-asr
+.venv-asr\Scripts\pip install faster-whisper numpy pillow "av<19"
+# 然后把 VW_PYTHON 指到 .venv-asr\Scripts\python.exe
 ```
+
+首次转写会自动从 hf-mirror 下载模型（约 460MB，small），之后不再下载。
 
 视频理解的两条链（**由模型根据你 @ 时说的话判断**，不用代码正则）：
 

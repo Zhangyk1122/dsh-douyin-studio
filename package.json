@@ -20,6 +20,7 @@
     "docs",
     "jsconfig.json",
     "cordis.patch.yml",
+    "vendor",
     "SKILL.md",
     "README.md",
     "CHANGES.md"

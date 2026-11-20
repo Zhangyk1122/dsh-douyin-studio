@@ -103,6 +103,11 @@ unzip dsh-douyin-studio-0.7.20-patched-2026-11-19.zip -d ~/somewhere
 - `understand(awemeId)`：detail → 判型 → 视频走 video-watch-plus / 图文返回图片地址。
 - 依赖环境变量：`VW_DIR`（video-watch-plus 目录）、`VW_PYTHON`（带 faster-whisper 的 python）、`VW_FFMPEG`、`HF_HOME`。
 
+### 15. 内置 video-watch-plus + 包名改 zk（2026-11-20）
+- 把 video-watch-plus 的 `vendor/vw.py`、`vendor/vwtools.py`、`scripts/audio_probe.py`、`scripts/asr_hallucination_check.py` 打包进 `vendor/video-watch-plus/`（MIT，保留 LICENSE/NOTICE）。
+- `understand.mjs` 的 `defaultPaths()` 优先用自带的 vendor 目录，不再需要单独 clone 或设 `VW_DIR`。
+- 包名改为 `dsh-douyin-studio-zk`（package.json + cordis.patch.yml），避免与上游重名。
+
 ### 14. `lib/understand.mjs` 补 grid 步骤（2026-11-20）
 - `understandVideoFile()` 加第 4 步：ffmpeg `tile` 抽 16 帧铺 4x4 拼图，返回 `grid` 路径给视觉模型。
 - **ImageMagick 不是必须的**：vw.py 的 grid/seq/read 用 magick，但 studio 集成只用 ffmpeg tile 即可看图。
