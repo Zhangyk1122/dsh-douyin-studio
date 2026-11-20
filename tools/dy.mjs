@@ -688,6 +688,14 @@ try {
 		die({ error: 'watch 只认 once / start / status' })
 	}
 
+	/* ── 看懂作品：视频 → video-watch-plus；图文 → 返回图片地址 ─────── */
+	if (CMD === 'video-understand') {
+		const { understand } = await import('../lib/understand.mjs')
+		const r = await understand(String(argOf('--aweme') || ''), { mode: argOf('--mode', 'watch') })
+		out(r)
+		process.exit(0)
+	}
+
 	/* ── 登录：出二维码 / 查状态 ──────────────────────────────────── */
 	if (CMD === 'login') {
 		const mod = await import('../lib/login.mjs')

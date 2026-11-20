@@ -131,7 +131,13 @@ export function apply(ctx, config) {
 			try { lim = S.limitsJson ? JSON.parse(S.limitsJson) : {} } catch { lim = {} }
 			const perDay = { ...(lim.perDay || {}) }
 			if (!Number.isFinite(Number(perDay.comment))) perDay.comment = S.perDay
-			BUDGET.configure({ limits: { ...lim, perDay }, ownerUid: st.ownerUid })
+			/* 2026-11-19 本地改：白名单模式下「每人每天」按设置走；owner 不再自动豁免，
+			 * 否则白名单额度对主人自己永远不生效。 */
+			const perPeer = { ...(lim.perPeerPerDay || {}) }
+			const wlArr = Array.isArray(st.whitelist) ? st.whitelist : []
+			const wlPerDay = wlArr.reduce((m, e) => Math.max(m, Number(e && e.quota) || 0), Number(st.replyWhitePerDay) || 5)
+			if (Number.isFinite(wlPerDay) && wlPerDay > 0) perPeer.dm = wlPerDay
+			BUDGET.configure({ limits: { ...lim, perDay, perPeerPerDay: perPeer }, ownerUid: '' })
 		} catch { /* 读不到设置就沿用默认额度，不要因此挂掉 */ }
 	}
 	syncBudget()
@@ -669,6 +675,31 @@ export function apply(ctx, config) {
 					}
 
 					/* ── 2026-11-02：收件箱 / 预算 / 刷视频 / 自己评论区 ───────────── */
+					/* 2026-11-19 本地修：把「已经回过」的条目从待回计数里扣掉，并在条目上打 replied 标记。
+					 * 修之前：13:58 已经回过的 @ 仍然算 worth，角标永远挂在旧数字上骗人。 */
+					const adjustInbox = (body, rm) => {
+						if (!body || typeof body !== 'object') return body
+						const dm = (body.dm && Array.isArray(body.dm.items)) ? body.dm.items : []
+						const at = (body.at && Array.isArray(body.at.items)) ? body.at.items : []
+						const own = (body.own && Array.isArray(body.own.items)) ? body.own.items : []
+						const atKey = (x) => String((x && x.aweme_id) || '') + ':' + String((x && (x.comment_id || x.root_comment_id)) || '')
+						/* 2026-11-19 本地修 2：replied 记的是「上次回的那条消息时间」，
+						 * 不能只看有没有记录 —— 新消息比它新就是待回。 */
+						const dmIsPending = (x) => {
+							const r = x && rm.dm[String(x.uid)]
+							if (!r) return true
+							const t = x && x.last_at
+							return Boolean(t) && String(t) > String(r)
+						}
+						const dmPending = dm.filter(dmIsPending)
+						const atPending = at.filter((x) => !(x && rm.at[atKey(x)]))
+						for (const x of dm) if (x && !dmIsPending(x)) x.replied = true
+						for (const x of at) if (x && rm.at[atKey(x)]) x.replied = true
+						if (body.counts && typeof body.counts === 'object') {
+							body.counts = { ...body.counts, dm: dmPending.length, at: atPending.length, own: own.length }
+						}
+						return body
+					}
 					if (req.method === 'GET' && p === '/inbox') {
 						const lim = Math.max(1, Math.min(20, Number(url.searchParams.get('limit') || 8)))
 						/* 秒开：有缓存就立刻给，后台补；没有才等。判定在 lib/cache.mjs。 */
@@ -680,7 +711,9 @@ export function apply(ctx, config) {
 							refresh: startInboxRefresh,
 							ttl: INBOX_TTL,
 						})
-						return sendJson(res, 200, { ...out.body, kill: { on: isKilled(), info: killInfo() } })
+						let ib = out.body
+						try { ib = adjustInbox({ ...out.body }, AUTOPILOT.repliedMap()) } catch { ib = out.body }
+						return sendJson(res, 200, { ...ib, kill: { on: isKilled(), info: killInfo() } })
 					}
 					/* 只要一个数字（tab 角标）—— 读缓存，**绝不触发刷新**。
 					 * 角标不值得为它跑一轮浏览器：打开设置页不是「我要看私信」。 */
@@ -696,7 +729,23 @@ export function apply(ctx, config) {
 						if (stale && !inboxTask) startInboxRefresh(8).catch(() => {})
 						return sendJson(res, 200, {
 							ok: true, cached: Boolean(c), at, stale,
-							reply: d ? k('dm') + k('at') + k('own') : 0,
+							reply: d ? (() => {
+								try {
+									const rm = AUTOPILOT.repliedMap()
+									const dm = (d.dm && d.dm.items) || []
+									const at = (d.at && d.at.items) || []
+									const atKey = (x) => String((x && x.aweme_id) || '') + ':' + String((x && (x.comment_id || x.root_comment_id)) || '')
+									const dmPending2 = (x) => {
+										const r = x && rm.dm[String(x.uid)]
+										if (!r) return true
+										const t = x && x.last_at
+										return Boolean(t) && String(t) > String(r)
+									}
+									return dm.filter(dmPending2).length
+										+ at.filter((x) => !(x && rm.at[atKey(x)])).length
+										+ Number((d.counts && d.counts.own) || 0)
+								} catch { return k('dm') + k('at') + k('own') }
+							})() : 0,
 						})
 					}
 					if (req.method === 'GET' && p === '/budget') {
@@ -1152,7 +1201,16 @@ export function apply(ctx, config) {
 	/* 自主执行：定时器常驻，每轮自己看开关 —— 关着就是空转，不花钱也不发东西。
 	 * 2026-11-04 从 5 分钟放到 30 分钟：主人说私信不用一直盯，跟回评论一个节奏就行。
 	 * 这样面板上开/关立刻生效，不需要重启。 */
-	try { if (!isKilled()) AUTOPILOT.start({ everyMin: 30, runCli: run }) } catch { /* 起不来不影响手动 */ }
+	try {
+		if (!isKilled()) {
+			const rs0 = readSettings()
+			AUTOPILOT.start({
+				everyMin: Number(rs0.replyEveryMin) || 30,
+				everyMaxMin: Number(rs0.replyEveryMaxMin) || 180,
+				runCli: run,
+			})
+		}
+	} catch { /* 起不来不影响手动 */ }
 
 	/* 每天自动刷几轮：轮次由 lib/schedule.mjs 铺开（纯函数，单测钉着）。
 	 * 只有「现在轮到了、今天还没刷过这一轮」才真去刷；跨天清零。

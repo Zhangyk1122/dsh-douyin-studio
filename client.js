@@ -490,8 +490,11 @@ window.__ModuleLoader__.load({
       },
       {
         k: 'autoComment', icon: 'comment', label: '回评论',
-        desc: '值班时挑该接的评论回；每条都过「人 / 楼 / 次数 / 额度」四道闸',
-        knobs: [{ k: 'replyMaxPerRound', label: '每轮几条', type: 'number' }],
+        desc: '值班时挑该接的评论回；每条都过「人 / 楼 / 次数 / 额度」四道闸（独立定时器）',
+        knobs: [
+          { k: 'replyMaxPerRound', label: '每轮几条', type: 'number' },
+          { k: 'dutyEveryMin', label: '间隔(分)', type: 'number', ph: '30' },
+        ],
       },
       {
         k: 'autoAt', icon: 'at', label: '回 @我',
@@ -573,6 +576,62 @@ window.__ModuleLoader__.load({
 
     const AUTOPILOT_CN = { dm: '私信', at: '回 @', publish: '发布', report: '报平安' }
 
+    /* 2026-11-19 本地加：白名单页 —— 谁可以 @ / 私信它，每人每天几条。 */
+    const WhiteListCard = ({ settings, onSaved }) => {
+      const src = settings || {}
+      const sig = JSON.stringify(src)
+      const [v, setV] = useState(src)
+      const [note, setNote] = useState('')
+      const [busy, setBusy] = useState(false)
+      const [f, setF] = useState({ nick: '', uid: '', quota: 5, role: 'guest' })
+      useEffect(() => { setV(src) }, [sig]) // eslint-disable-line
+      const list = Array.isArray(v.whitelist) ? v.whitelist : []
+      const save = async (rows) => {
+        const next = { ...v, whitelist: rows }
+        setV(next); setBusy(true); setNote('')
+        try {
+          const r = await jpost('/settings', { settings: next })
+          if (r && r.ok) { setNote('已存'); onSaved && onSaved() }
+          else setNote('没存上：' + ((r && r.error) || '未知原因'))
+        } catch (e) { setNote('没存上：' + String((e && e.message) || e)) }
+        finally { setBusy(false) }
+      }
+      const setRow = (i, patch) => setV({ ...v, whitelist: list.map((x, ix) => (ix === i ? { ...x, ...patch } : x)) })
+      const add = () => {
+        if (!f.nick.trim() && !f.uid.trim()) { setNote('昵称和 uid 至少填一个'); return }
+        const rows = [...list, { nick: f.nick.trim(), uid: f.uid.trim(), quota: Math.max(1, Number(f.quota) || 5), role: f.role }]
+        save(rows).then(() => setF({ nick: '', uid: '', quota: 5, role: 'guest' }))
+      }
+      const inp = (val, onChange, extra) => h('input', { 'data-dys-in': '', type: 'text', value: val == null ? '' : String(val), onChange, ...extra })
+      const num = (val, onChange) => h('input', { 'data-dys-in': '', type: 'number', min: 1, max: 50, value: val, onChange, style: { width: '62px', marginLeft: '4px' } })
+      const roleSel = (val, onChange) => h('select', { 'data-dys-in': '', value: val === 'owner' ? 'owner' : 'guest', onChange },
+        h('option', { value: 'guest' }, '成员'), h('option', { value: 'owner' }, '主人'))
+      return h(Card, {
+        title: '白名单', icon: 'at', kind: 'form',
+        sub: list.length ? (list.length + ' 个人 · 只有名单里的人能被回') : '名单为空 = 谁都能触发（建议至少放主人）',
+        tools: note ? h('span', { 'data-dys-xs': '', 'data-dys-dim': '' }, note) : null,
+      },
+        h('div', { 'data-dys-col': '', style: { gap: '8px' } },
+          list.length
+            ? list.map((e, i) => h('div', { key: i, 'data-dys-row': '', style: { gap: '6px', alignItems: 'center' } },
+              inp(e.nick, (ev) => setRow(i, { nick: ev.target.value }), { placeholder: '抖音昵称', style: { width: '130px' } }),
+              inp(e.uid, (ev) => setRow(i, { uid: ev.target.value }), { placeholder: 'uid（可选）', style: { width: '140px' } }),
+              h('label', { 'data-dys-xs': '', 'data-dys-dim': '' }, '每天', num(e.quota, (ev) => setRow(i, { quota: Number(ev.target.value) || 1 }))),
+              roleSel(e.role, (ev) => setRow(i, { role: ev.target.value })),
+              h(Btn, { label: '保存', onClick: () => save(list), busy, busyLabel: '存…' }),
+              h(Btn, { label: '删除', ghost: true, onClick: () => save(list.filter((_, ix) => ix !== i)) })))
+            : h('div', { 'data-dys-note': '' }, '还没有白名单成员。'),
+          h('div', { 'data-dys-row': '', style: { gap: '6px', alignItems: 'center', marginTop: '4px' } },
+            h('input', { 'data-dys-in': '', type: 'text', placeholder: '抖音昵称', value: f.nick, onChange: (ev) => setF({ ...f, nick: ev.target.value }), style: { width: '130px' } }),
+            h('input', { 'data-dys-in': '', type: 'text', placeholder: 'uid（可选）', value: f.uid, onChange: (ev) => setF({ ...f, uid: ev.target.value }), style: { width: '140px' } }),
+            h('label', { 'data-dys-xs': '', 'data-dys-dim': '' }, '每天', num(f.quota, (ev) => setF({ ...f, quota: Number(ev.target.value) || 1 }))),
+            roleSel(f.role, (ev) => setF({ ...f, role: ev.target.value })),
+            h(Btn, { label: '添加', primary: true, onClick: add, busy, busyLabel: '存…' })),
+          h('div', { 'data-dys-note': '' },
+            '额度 = 这个人每天最多被回几条（私信和 @ 分开计）。角色只是标记，不影响判断；名单为空会回到「谁都能触发」。')
+        ))
+    }
+
     const AutopilotCard = ({ data, settings, err, loading, alive, onSaved, onRun }) => {
       const src = settings || {}
       const sig = JSON.stringify(src)
@@ -647,6 +706,28 @@ window.__ModuleLoader__.load({
         loading && !Object.keys(src).length
           ? h('div', { 'data-dys-col': '', style: { gap: '6px' } }, [0, 1, 2].map((i) => h('div', { key: i, 'data-dys-skel': '' })))
           : null,
+        h('div', { 'data-dys-note': '', style: { marginTop: '2px' } },
+          '它多久主动跑一轮（随机）：'),
+        h('div', { 'data-dys-knobs': '' },
+          h(MiniField, {
+            f: { k: 'replyEveryMin', label: '最短间隔(分)', type: 'number', ph: '30' },
+            v: v.replyEveryMin, onCommit: (val) => save({ replyEveryMin: val }),
+          }),
+          h(MiniField, {
+            f: { k: 'replyEveryMaxMin', label: '最长间隔(分)', type: 'number', ph: '180' },
+            v: v.replyEveryMaxMin, onCommit: (val) => save({ replyEveryMaxMin: val }),
+          })),
+        h('div', { 'data-dys-knobs': '' },
+          h(MiniField, {
+            f: { k: 'replyWhiteList', label: '白名单(逗号分隔，空=不限)', type: 'text', ph: '绿豆沙, 111430736479' },
+            v: v.replyWhiteList, onCommit: (val) => save({ replyWhiteList: val }),
+          }),
+          h(MiniField, {
+            f: { k: 'replyWhitePerDay', label: '每人每天几条', type: 'number', ph: '3' },
+            v: v.replyWhitePerDay, onCommit: (val) => save({ replyWhitePerDay: val }),
+          })),
+        h('div', { 'data-dys-xs': '', 'data-dys-dim': '' },
+          '这一轮里同时做：回私信、回 @我、发布、报平安。回评论是另一个定时器，用下面它自己那行的间隔。'),
         h('div', { 'data-dys-auto': '' },
           AUTO_ROWS.map((row) => {
             const on = Boolean(v[row.k])
@@ -676,7 +757,7 @@ window.__ModuleLoader__.load({
             title: '立刻按上面的开关跑一轮（不等定时）',
           })),
         h('div', { 'data-dys-xs': '', 'data-dys-dim': '' },
-          '受额度和静音时段限制；关掉就是只读。定时器每 5 分钟看一次。'),
+          '受额度和静音时段限制；关掉就是只读。每轮之间在「最短/最长间隔」里随机取一个时间（默认 30~180 分钟）。'),
         res ? h('div', {
           'data-dys-sm': '',
           style: {
@@ -1746,6 +1827,10 @@ window.__ModuleLoader__.load({
       const nodeFeed = h(Feed, {
         data: feedData, err: feedErr, busy: feedBusy, onRun: runFeed, onOpen: openInBot,
       })
+      const nodeWhite = h(WhiteListCard, {
+        settings: (get('/settings') || {}).settings,
+        onSaved: () => load(['/settings']),
+      })
       const nodeSettings = h(SettingsCard, {
         data: get('/settings'), err: errOf('/settings'), loading: loading['/settings'],
         onSaved: () => load(['/settings']),
@@ -1779,12 +1864,13 @@ window.__ModuleLoader__.load({
       /* 四个区 = 四个动词：看（今天）· 回（回应）· 找（找内容）· 调（设置）。
        * 以前按模块分组，同一个动作被拆到几个区里（刷视频就拆成了三份），
        * 于是"我想刷点新东西"要先想清楚点哪个入口 —— 那说明分组错了。 */
-      const VIEWS = [['today', '今天'], ['reply', '回应'], ['find', '找内容'], ['settings', '设置']]
+      const VIEWS = [['today', '今天'], ['reply', '回应'], ['find', '找内容'], ['settings', '设置'], ['white', '白名单']]
       const viewCards = {
         today: [nodeBudget, nodeDutyLog, nodeDigest, nodeTrend],
         reply: [nodeInbox, nodeAuto, nodeOps],
         find: [h(Picks, { onOpen: openInBot }), nodeFeed, nodePublish],
         settings: [nodeSettings],
+        white: [nodeWhite],
       }[view] || [nodeDigest]
       const tab = (id, label) => h('button', {
         key: id, type: 'button', 'data-on': view === id ? '' : undefined,
