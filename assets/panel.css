@@ -11,7 +11,9 @@
   --dys-raise:color-mix(in oklab, currentColor 14%, transparent);
   --dys-dim:.66;
   --dys-blue:var(--dsw-alias-brand-primary, #6f9ff0);
-  --dys-on-accent:var(--dsw-alias-label-inverse, #0c1017);
+  /* 不要用 --dsw-alias-label-inverse：深色主题下它是「深色」（用于浅底），
+     放到品牌色填充按钮上就是黑底黑字（2026-11-21 实测：按钮只剩一个黑色圆角块）。 */
+  --dys-on-accent:#ffffff;
   --dys-teal:#5fc3a4;
   --dys-violet:#a893e6;
   --dys-amber:var(--dsw-alias-state-warn-primary, #dbae6b);
