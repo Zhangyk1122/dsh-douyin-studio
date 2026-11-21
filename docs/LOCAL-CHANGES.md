@@ -103,6 +103,13 @@ unzip dsh-douyin-studio-0.7.20-patched-2026-11-19.zip -d ~/somewhere
 - `understand(awemeId)`：detail → 判型 → 视频走 video-watch-plus / 图文返回图片地址。
 - 依赖环境变量：`VW_DIR`（video-watch-plus 目录）、`VW_PYTHON`（带 faster-whisper 的 python）、`VW_FFMPEG`、`HF_HOME`。
 
+### 24. 修私信发送：`openPage` 没真正落到 /chat（2026-11-21，对比上游后定位）
+- **先纠正上一版判断**：`/chat` 路由没坏。坏的是 `openPage({url})` 在同域标签页已存在时会复用、并且只等 1.8 秒；不传 `want`/`navigate` 就可能压根没导航过去，于是读到的是**别的页**（首页外壳）→ 行数 0 → 报「会话列表里没有 XX」。
+- 对比上游 `jackey670/dsh-douyin-whale`：它同样 `goto(CHAT_URL)`，但**等的是搜索框**、并且**用搜索框搜人**再点结果。结论：上游逻辑没问题，缺的是「确认真的落在 /chat」。
+- 修法（两处调用点各一行）：`im-send.mjs` 的 `openPage({url})` → `openPage({ url: CHAT_URL, navigate: true, want: '/chat' })`；`im-report.mjs` 补上同样的 `want`。
+- 验证：`sendByUi({ nick: '绿豆沙', uid: '111430736479', text, dry: true })` → `{ok:true, typed:'…', log:['找到行 绿豆沙','输入框出现','文字已写入']}`。
+- 顺带说明：`uid` 认人（sec_uid→uid 反查）已生效，昵称只作兜底。
+
 ### 23. 图文作品会看图了（2026-11-21，实测通过）
 - 新增 `lib/media-image.mjs`：`prepareImages()` 从 `detail.images[]` 下载（带 Referer/UA，失败重试一次）→ ffmpeg 缩到 1024 宽 jpg → 返回本地路径；`prune()` 保留最近 60 个文件。
 - 新增 `duty.generateWithImages()`：直连 profile 配的模型，OpenAI 多模态格式发图（`image_url` base64）。
