@@ -103,6 +103,12 @@ unzip dsh-douyin-studio-0.7.20-patched-2026-11-19.zip -d ~/somewhere
 - `understand(awemeId)`：detail → 判型 → 视频走 video-watch-plus / 图文返回图片地址。
 - 依赖环境变量：`VW_DIR`（video-watch-plus 目录）、`VW_PYTHON`（带 faster-whisper 的 python）、`VW_FFMPEG`、`HF_HOME`。
 
+### 19. 修「配了自动回复却一条都不回」（2026-11-21，真机定位）
+- **bug A：昵称缓存路径算错**。`lib/names.mjs` 用「相对 lib 往上三级」定位 `douyin-duty`：`link:` 安装下算成 `<仓库父目录>/douyin-duty`，正常安装下算成 `profiles/<profile>/douyin-duty`，两种都和其它模块（`$DSH_HOME/douyin-duty`）读写的位置不同 → `nameOf()` 永远为空。改为 `$DSH_HOME/douyin-duty`。
+- **bug B：昵称拿不到就永远不发**。`_runDm` 里 `if (!nick) skip「怕发错人」`，而 imapi 不给昵称、`/chat` 也可能抄不到（实测 `scraped:0`）→ 一条都不发。新增 `configuredNick()`：`ownerUid→ownerNick`、白名单 `uid→nick` 作为兜底。
+- **顺带纠正**：回私信**不再被谷时窗口拦**（只有 `peakReply===false` 才按窗口拦）；被窗口拦的是发作品/回评论等。
+- 验证：`configuredNick(111430736479)` → `绿豆沙`；用「对方刚发来新消息」的模拟会话跑 `pickDm` → 能选中（score 75），白名单放行。
+
 ### 18. 视频理解改成零配置（2026-11-21）
 - `understand.mjs` 新增 `resolvePython()`：按 `VW_PYTHON` → `~/.dsh/douyin-duty/venv` → 插件 `.venv-asr`/`.venv` → `python3` 顺序探测，每个候选都验 `import faster_whisper`，结果缓存。
 - 子进程默认注入 `HF_HOME=~/.dsh/douyin-duty/hf-cache`、`HF_ENDPOINT=hf-mirror`，模型缓存不再落到 `~/.cache`。
