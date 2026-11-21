@@ -103,6 +103,14 @@ unzip dsh-douyin-studio-0.7.20-patched-2026-11-19.zip -d ~/somewhere
 - `understand(awemeId)`：detail → 判型 → 视频走 video-watch-plus / 图文返回图片地址。
 - 依赖环境变量：`VW_DIR`（video-watch-plus 目录）、`VW_PYTHON`（带 faster-whisper 的 python）、`VW_FFMPEG`、`HF_HOME`。
 
+### 23. 图文作品会看图了（2026-11-21，实测通过）
+- 新增 `lib/media-image.mjs`：`prepareImages()` 从 `detail.images[]` 下载（带 Referer/UA，失败重试一次）→ ffmpeg 缩到 1024 宽 jpg → 返回本地路径；`prune()` 保留最近 60 个文件。
+- 新增 `duty.generateWithImages()`：直连 profile 配的模型，OpenAI 多模态格式发图（`image_url` base64）。
+- `runAt` 接入：图文作品（`images[]` 非空）→ 下载最多 3 张 → 带图 + **会话最近 3 轮摘要**生成回复；任何一步失败静默退回纯文字。
+- 开关：`atUnderstandImages`（默认 true）、`atImageMax`（默认 3）、`atImageMaxWidth`（默认 1024）。
+- **实测**：9 图壁纸帖取前 2 张 → `prompt_tokens: 1150 / completion: 597`（reasoning 575），回复「第二张粉紫天色配那几棵松树真绝了」——核对原图完全正确（粉紫天空 + 松树 + 冰湖）。
+- 坑：推理型模型 `max_tokens` 太小（200）会全被 `reasoning_tokens` 吃光、`content` 为空；设 ≥600 且只取 `content`。
+
 ### 22. 回复改走「固定会话 + 轮换」（2026-11-21，实测省 30 倍）
 - 新增 `lib/llm-session.mjs`：状态存 `$DSH_HOME/douyin-studio/llm-session.json`（sessionId / turns / bornAt / recent / stat）。
 - 新增 `generateViaSession()`：`dsh headless --json [--session-id <id>] -`，任务走 stdin；解析事件流拿 `sessionId` / 正文 / `usage`。
