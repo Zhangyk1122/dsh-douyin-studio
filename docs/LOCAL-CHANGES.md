@@ -103,6 +103,12 @@ unzip dsh-douyin-studio-0.7.20-patched-2026-11-19.zip -d ~/somewhere
 - `understand(awemeId)`：detail → 判型 → 视频走 video-watch-plus / 图文返回图片地址。
 - 依赖环境变量：`VW_DIR`（video-watch-plus 目录）、`VW_PYTHON`（带 faster-whisper 的 python）、`VW_FFMPEG`、`HF_HOME`。
 
+### 20. 修「@ 我 / 私信不回复」的第三层根因：生成回复在 macOS 上直接崩（2026-11-21）
+- **bug C（最致命）**：`lib/duty.mjs` 的 CLI 回退写死 `spawn('cmd.exe', ['/c', 'dsh', 'headless', ...])` —— 只有 Windows 能跑，macOS/Linux 直接 `spawn cmd.exe ENOENT`，于是 `generate()` 必然失败 → 自动回复一条都发不出。改为 `spawnHeadless()`：按平台选 shell，并给 `dsh` 一个候选路径列表。
+- **bug D**：headless 子进程拿不到宿主凭据 → `MISSING_CREDENTIAL: llm-deepseek ... deepseek-official`。现在从 `$DSH_HOME/.credentials.yaml` 的 `refs.DEEPSEEK_API_KEY` 注入 env。
+- **bug E**：`readKey()` 正则 `[A-Za-z0-9_\-]{16,}` 遇到平台 key 里的点号（`ak_xxx.yyy`）会截断成 <16 位 → 静默返回空。改为允许任意非空白字符，但**只接受 `sk-` 开头**（api.deepseek.com 认的格式），其它交给 CLI 分支。
+- 验证：`generate("说一句十个字以内的话")` → `{ok:true, via:"cli", text:"好的，就这样回答。"}`
+
 ### 19. 修「配了自动回复却一条都不回」（2026-11-21，真机定位）
 - **bug A：昵称缓存路径算错**。`lib/names.mjs` 用「相对 lib 往上三级」定位 `douyin-duty`：`link:` 安装下算成 `<仓库父目录>/douyin-duty`，正常安装下算成 `profiles/<profile>/douyin-duty`，两种都和其它模块（`$DSH_HOME/douyin-duty`）读写的位置不同 → `nameOf()` 永远为空。改为 `$DSH_HOME/douyin-duty`。
 - **bug B：昵称拿不到就永远不发**。`_runDm` 里 `if (!nick) skip「怕发错人」`，而 imapi 不给昵称、`/chat` 也可能抄不到（实测 `scraped:0`）→ 一条都不发。新增 `configuredNick()`：`ownerUid→ownerNick`、白名单 `uid→nick` 作为兜底。
