@@ -103,6 +103,11 @@ unzip dsh-douyin-studio-0.7.20-patched-2026-11-19.zip -d ~/somewhere
 - `understand(awemeId)`：detail → 判型 → 视频走 video-watch-plus / 图文返回图片地址。
 - 依赖环境变量：`VW_DIR`（video-watch-plus 目录）、`VW_PYTHON`（带 faster-whisper 的 python）、`VW_FFMPEG`、`HF_HOME`。
 
+### 16. 修复视频理解取流 403（2026-11-21，真机验证）
+- 抖音 CDN 拒 ffmpeg 默认 UA（403 Forbidden），带浏览器 UA + douyin.com Referer 就能拉。
+- `understandVideoFile()` 加「下载」步骤：先用 ffmpeg `-user_agent UA -referer REFERER` 把 play_url 拉到本地 `media.mp4`，再交给 probe/audio_probe/asr/grid。
+- 真机（登录测试号）跑通：download/probe/audioProbe/asr/grid 五步全 ok，正确转写「大山的小孩」预告片内容。
+
 ### 15. 内置 video-watch-plus + 包名改 zk（2026-11-20）
 - 把 video-watch-plus 的 `vendor/vw.py`、`vendor/vwtools.py`、`scripts/audio_probe.py`、`scripts/asr_hallucination_check.py` 打包进 `vendor/video-watch-plus/`（MIT，保留 LICENSE/NOTICE）。
 - `understand.mjs` 的 `defaultPaths()` 优先用自带的 vendor 目录，不再需要单独 clone 或设 `VW_DIR`。
