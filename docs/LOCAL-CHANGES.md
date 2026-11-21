@@ -103,6 +103,13 @@ unzip dsh-douyin-studio-0.7.20-patched-2026-11-19.zip -d ~/somewhere
 - `understand(awemeId)`：detail → 判型 → 视频走 video-watch-plus / 图文返回图片地址。
 - 依赖环境变量：`VW_DIR`（video-watch-plus 目录）、`VW_PYTHON`（带 faster-whisper 的 python）、`VW_FFMPEG`、`HF_HOME`。
 
+### 21. 生成回复改用「本机 profile 配置的模型」直连（2026-11-21）
+- 新增 `resolveLlm()`：读 `$DSH_HOME/profiles/<p>/cordis.patch.yml` 的 `agent-default-model`（provider+model）与对应 provider 的 `baseURL`/`apiKeyEnv`，key 从 `.credentials.yaml` 的 `refs` 取。**不写死任何厂商**，换机器读它自己的配置。
+- `DOUYIN_LLM_BASE_URL` / `DOUYIN_LLM_API_KEY` / `DOUYIN_LLM_MODEL` 可整体覆盖。
+- `generate()` 变成三级：readKey(sk- 真 key，走 api.deepseek.com) → **profile 直连** → `dsh headless` 兜底。
+- 为什么重要：`dsh headless` 每次要把整套系统提示词+工具定义塞进去，实测 **inputTokens 6479**（outputTokens 7）；profile 直连只要几百 token，**省一个数量级**，且快（3.8s vs 数秒起会话）。
+- 验证：`resolveLlm()` → `{baseURL: .../v1, model: DeepSeek-V4-Flash-Vision-Exp, via: "profile:desktop/oneapi"}`；`generate()` → `{ok:true, via:"profile"}`。
+
 ### 20. 修「@ 我 / 私信不回复」的第三层根因：生成回复在 macOS 上直接崩（2026-11-21）
 - **bug C（最致命）**：`lib/duty.mjs` 的 CLI 回退写死 `spawn('cmd.exe', ['/c', 'dsh', 'headless', ...])` —— 只有 Windows 能跑，macOS/Linux 直接 `spawn cmd.exe ENOENT`，于是 `generate()` 必然失败 → 自动回复一条都发不出。改为 `spawnHeadless()`：按平台选 shell，并给 `dsh` 一个候选路径列表。
 - **bug D**：headless 子进程拿不到宿主凭据 → `MISSING_CREDENTIAL: llm-deepseek ... deepseek-official`。现在从 `$DSH_HOME/.credentials.yaml` 的 `refs.DEEPSEEK_API_KEY` 注入 env。
