@@ -103,6 +103,15 @@ unzip dsh-douyin-studio-0.7.20-patched-2026-11-19.zip -d ~/somewhere
 - `understand(awemeId)`：detail → 判型 → 视频走 video-watch-plus / 图文返回图片地址。
 - 依赖环境变量：`VW_DIR`（video-watch-plus 目录）、`VW_PYTHON`（带 faster-whisper 的 python）、`VW_FFMPEG`、`HF_HOME`。
 
+### 22. 回复改走「固定会话 + 轮换」（2026-11-21，实测省 30 倍）
+- 新增 `lib/llm-session.mjs`：状态存 `$DSH_HOME/douyin-studio/llm-session.json`（sessionId / turns / bornAt / recent / stat）。
+- 新增 `generateViaSession()`：`dsh headless --json [--session-id <id>] -`，任务走 stdin；解析事件流拿 `sessionId` / 正文 / `usage`。
+- 轮换规则：轮数 ≥ 50（`DOUYIN_LLM_SESSION_MAX_TURNS`）或超 24 小时（`..._MAX_HOURS`）换新会话；换时把最近 3 轮问答压成几行带过去，避免「换会话=失忆」。
+- `generate()` 增加 `DOUYIN_LLM_MODE`：`session`（默认）/ `direct`（profile 直连，最便宜但无历史）/ `fresh`（每次新开）/ `api`（sk- key 走 api.deepseek.com）。
+- **实测数字**：复用会话时 `cacheReadTokens: 6400 / inputTokens: 68~204`，缓存命中 **98%**；每条成本从 ¥0.0041 降到 **¥0.00013**（约 30 倍）。
+- 实测记忆：第 2 轮问「我叫什么」答「小明」；把阈值调到 1 触发轮换后，新会话仍答「小明」（摘要带过去了）。
+- 顺带：模型思考过程偶尔漏进正文（`XX</think>XX`），按最后一个 `</think>` 截断，再清残留标记。
+
 ### 21. 生成回复改用「本机 profile 配置的模型」直连（2026-11-21）
 - 新增 `resolveLlm()`：读 `$DSH_HOME/profiles/<p>/cordis.patch.yml` 的 `agent-default-model`（provider+model）与对应 provider 的 `baseURL`/`apiKeyEnv`，key 从 `.credentials.yaml` 的 `refs` 取。**不写死任何厂商**，换机器读它自己的配置。
 - `DOUYIN_LLM_BASE_URL` / `DOUYIN_LLM_API_KEY` / `DOUYIN_LLM_MODEL` 可整体覆盖。
