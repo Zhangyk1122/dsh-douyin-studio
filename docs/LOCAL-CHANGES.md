@@ -103,6 +103,13 @@ unzip dsh-douyin-studio-0.7.20-patched-2026-11-19.zip -d ~/somewhere
 - `understand(awemeId)`：detail → 判型 → 视频走 video-watch-plus / 图文返回图片地址。
 - 依赖环境变量：`VW_DIR`（video-watch-plus 目录）、`VW_PYTHON`（带 faster-whisper 的 python）、`VW_FFMPEG`、`HF_HOME`。
 
+### 25. 修私信「文字拼接/写不进去」（2026-11-21，真机踩到两次）
+- **症状 A**：dry 打完字不清空 → 下一次真实发送把旧文本一起发出去（实测发出「测试一下，别当真测试一下私信通道…」）。
+- **症状 B**：`Input.insertText` 是「插入」不是「覆盖」，任何残留都会和正文拼起来。
+- **症状 C**：坐标点击没落上焦点时 `insertText` 丢字，报「文字没写进输入框」。
+- 修法：① dry 结束前清空输入框；② **每次打字前先清空**（selectAll+delete + Backspace）；③ 写入失败重试一次，且每次都重新读编辑器坐标 + JS 强制 focus。
+- 验证：`sendByUi(dry)` 日志出现「dry 清空输入框（残留：）」；真实发送日志「文字已写入 → 输入框已清空」，`verified_http: true`。
+
 ### 24. 修私信发送：`openPage` 没真正落到 /chat（2026-11-21，对比上游后定位）
 - **先纠正上一版判断**：`/chat` 路由没坏。坏的是 `openPage({url})` 在同域标签页已存在时会复用、并且只等 1.8 秒；不传 `want`/`navigate` 就可能压根没导航过去，于是读到的是**别的页**（首页外壳）→ 行数 0 → 报「会话列表里没有 XX」。
 - 对比上游 `jackey670/dsh-douyin-whale`：它同样 `goto(CHAT_URL)`，但**等的是搜索框**、并且**用搜索框搜人**再点结果。结论：上游逻辑没问题，缺的是「确认真的落在 /chat」。
