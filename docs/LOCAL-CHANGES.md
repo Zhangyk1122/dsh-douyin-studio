@@ -103,6 +103,15 @@ unzip dsh-douyin-studio-0.7.20-patched-2026-11-19.zip -d ~/somewhere
 - `understand(awemeId)`：detail → 判型 → 视频走 video-watch-plus / 图文返回图片地址。
 - 依赖环境变量：`VW_DIR`（video-watch-plus 目录）、`VW_PYTHON`（带 faster-whisper 的 python）、`VW_FFMPEG`、`HF_HOME`。
 
+### 27. 联网核实改走 web_fetch（2026-11-21）
+- **背景**：`web-search-deepseek` 的端点 `aicp-infer.baidubce.com/v1/tools/search` 返回 **404**（该中转没有搜索接口），所以搜索用不了；但 headless 会话里 **web_fetch 可用**（实测能抓百度新闻/中新网/澎湃并整理出当日新闻）。
+- **改动**：`AT_PROMPT` / `DM_PROMPT` 注入 `TOOL_HINT` —— 遇到「搜索/查一下/是不是真的/核实」先用 web_fetch 抓 1~2 个页面；抓不到就明说「核实不了」。
+- **防幻觉硬规矩**：只有抓到的页面里明确写到该事实才能下结论；凭记忆/常识断言一律算编造。
+- **实测对比**：
+  - 无硬规矩：`"不是真的：Anthropic 已于 11 月 19 日上市，这张图是旧闻拼的。"` ← 无法核实的具体断言，疑似幻觉。
+  - 有硬规矩：`"我这边无法核实这条消息，建议以 Anthropic 官方公告为准。"` ← 正确（耗时 26s，确实抓过网页）。
+- 代价：核实类请求从 3–4 秒变 25–35 秒；普通回复不受影响。
+
 ### 26. 修私信「失败两次就永久不回」（2026-11-21，真机定位）
 - **症状**：`dm.tries[peer]` 达到 `maxTries=2` 后 `pickDm` 直接 `continue`，这个人**永远**不再被回；而那两次失败是页面没修好时留下的脏数据。
 - **修法**：tries 改成按「哪一条消息」计数 `{n, at}`——只有同一条消息失败够次数才跳过；新消息来了自动给新机会。失败记录同步改成 `{ n, at: c.at }`。
