@@ -103,6 +103,12 @@ unzip dsh-douyin-studio-0.7.20-patched-2026-11-19.zip -d ~/somewhere
 - `understand(awemeId)`：detail → 判型 → 视频走 video-watch-plus / 图文返回图片地址。
 - 依赖环境变量：`VW_DIR`（video-watch-plus 目录）、`VW_PYTHON`（带 faster-whisper 的 python）、`VW_FFMPEG`、`HF_HOME`。
 
+### 17. 修复 `WATCH.status is not a function`（2026-11-21，真机验证）
+- **根因（上游 bug）**：`45f338f`（0.6.1）把 `lib/watch.mjs` 从「盯私信守护」（tick/start/stop/status）整个重写成「看过这条视频的证据面」（watchOnce/watchOf/watchLine），但 `index.js`、`lib/tools.mjs`、`tools/dy.mjs` 仍在调 `WATCH.start/status/stop` → 函数不存在。从 0.6.1 一直坏到 0.7.20。
+- **修法**：把 0.6.0（`6444d19`）的守护实现还原成独立模块 `lib/dm-watch.mjs`，`index.js` 的 `import * as WATCH` 改指到它，`tools/dy.mjs` 的 `watch` 命令同步改。
+- **效果**：面板「开盯私信」不再报错；`watch once/status/start/stop` 可用；新私信可触发 `onFresh` 立刻回（就是你要的「发现即回」，不用等随机轮拍）。
+- 验证：`node tools/dy.mjs watch status` 返回 `{ok:true, running:false}`；`watch once` 返回 `{ok:true, fresh:[], notified:0}`。
+
 ### 16. 修复视频理解取流 403（2026-11-21，真机验证）
 - 抖音 CDN 拒 ffmpeg 默认 UA（403 Forbidden），带浏览器 UA + douyin.com Referer 就能拉。
 - `understandVideoFile()` 加「下载」步骤：先用 ffmpeg `-user_agent UA -referer REFERER` 把 play_url 拉到本地 `media.mp4`，再交给 probe/audio_probe/asr/grid。
@@ -141,7 +147,7 @@ replyEveryMin = 10, replyEveryMaxMin = 180
 1. **@ 没有每人额度**：账本 `at` 条目 `peer` 为空（只记 `thread`），要做按人额度需先把对方 uid 写进 `budget.record({ch:'at', peer})`
 2. **只处理 type 45/46**：`lib/inbox.mjs` `atCandidates` 写死 `type===45||46`；「回复我的评论」(31/32) 不触发
 3. **`待回` 两处来源**：tab 角标 `/inbox/count` 与头部 `schedule.hero.pending`；都已修，但**必须重启 DSH** 才进宿主
-4. **`watch`（新私信即时回）在 0.7.20 是坏的**：`douyin_studio_watch` 报 `WATCH.start is not a function`，所以没有即时回，只能等随机拍
+4. ~~**`watch`（新私信即时回）在 0.7.20 是坏的**~~ → **已修（见第 17 条）**：原报 `WATCH.status is not a function`
 5. **`limitsJson` 需重启生效**
 
 ---

@@ -16,7 +16,7 @@
 import { loadHostDeps } from './lib/hostdeps.mjs'
 import { registerTools } from './lib/tools.mjs'
 import { registerExtraTools } from './lib/tools-extra.mjs'
-import * as WATCH from './lib/watch.mjs'
+import * as WATCH from './lib/dm-watch.mjs' // 盯私信守护（0.6.1 被 watch.mjs 重写覆盖，这里还原）
 import * as DUTY from './lib/duty.mjs'
 import * as AUTOPILOT from './lib/autopilot.mjs'
 import * as OWNER from './lib/owner.mjs'

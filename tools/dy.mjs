@@ -674,7 +674,7 @@ try {
 	}
 
 	if (CMD === 'watch') {
-		const mod = await import('../lib/watch.mjs')
+		const mod = await import('../lib/dm-watch.mjs')
 		const act = String(argv[1] || 'once')
 		if (act === 'once') { out(await mod.tick({ quiet: !has('--loud') })); process.exit(0) }
 		if (act === 'status') { out(mod.status()); process.exit(0) }
