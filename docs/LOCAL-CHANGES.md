@@ -103,6 +103,11 @@ unzip dsh-douyin-studio-0.7.20-patched-2026-11-19.zip -d ~/somewhere
 - `understand(awemeId)`：detail → 判型 → 视频走 video-watch-plus / 图文返回图片地址。
 - 依赖环境变量：`VW_DIR`（video-watch-plus 目录）、`VW_PYTHON`（带 faster-whisper 的 python）、`VW_FFMPEG`、`HF_HOME`。
 
+### 18. 视频理解改成零配置（2026-11-21）
+- `understand.mjs` 新增 `resolvePython()`：按 `VW_PYTHON` → `~/.dsh/douyin-duty/venv` → 插件 `.venv-asr`/`.venv` → `python3` 顺序探测，每个候选都验 `import faster_whisper`，结果缓存。
+- 子进程默认注入 `HF_HOME=~/.dsh/douyin-duty/hf-cache`、`HF_ENDPOINT=hf-mirror`，模型缓存不再落到 `~/.cache`。
+- 真机验证：**不设任何环境变量**跑 `video-understand` 成功（download/audioProbe/asr 全 ok，probe/grid 在 transcribe 模式跳过）。
+
 ### 17. 修复 `WATCH.status is not a function`（2026-11-21，真机验证）
 - **根因（上游 bug）**：`45f338f`（0.6.1）把 `lib/watch.mjs` 从「盯私信守护」（tick/start/stop/status）整个重写成「看过这条视频的证据面」（watchOnce/watchOf/watchLine），但 `index.js`、`lib/tools.mjs`、`tools/dy.mjs` 仍在调 `WATCH.start/status/stop` → 函数不存在。从 0.6.1 一直坏到 0.7.20。
 - **修法**：把 0.6.0（`6444d19`）的守护实现还原成独立模块 `lib/dm-watch.mjs`，`index.js` 的 `import * as WATCH` 改指到它，`tools/dy.mjs` 的 `watch` 命令同步改。

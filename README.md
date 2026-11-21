@@ -42,31 +42,38 @@ dsh plugin --profile desktop add link:$PWD
 
 装完**重启 DSH**。首次使用：面板扫码登录 → 填 ownerUid → node tools/dy.mjs doctor 确认 cdp up。
 
-## 视频理解（本 fork 新增，可选）
+## 视频理解（本 fork 新增）
 
-video-watch-plus 已**打包进本仓库**（vendor/video-watch-plus/，MIT），不用再单独 clone。只差外部环境：ffmpeg + 一个带 faster-whisper 的 python。环境变量：
+video-watch-plus 已**打包进本仓库**（vendor/video-watch-plus/，MIT）。ffmpeg、python、模型缓存都会**自动探测**，正常情况下**不需要配任何环境变量**。
 
-| 变量 | 说明 |
+自动探测顺序：
+
+| 依赖 | 顺序 |
 |---|---|
-| VW_DIR | 可选。默认用插件自带的 vendor/video-watch-plus，一般不用设 |
-| VW_PYTHON | 装了 faster-whisper（1.2.x）+ numpy + Pillow + av<19 的 python |
-| VW_FFMPEG | ffmpeg 路径（含 scdet/freezedetect/drawtext 的完整构建） |
-| VW_FFPROBE | ffprobe 路径（可选，缺了 video-watch-plus 会用不了） |
-| HF_HOME | faster-whisper 模型缓存目录 |
+| python（带 faster-whisper） | `VW_PYTHON` → `~/.dsh/douyin-duty/venv` → 插件目录 `.venv-asr`/`.venv` → `python3`/`python`（每个候选都会验一次 `import faster_whisper`） |
+| ffmpeg | `VW_FFMPEG`/`DOUYIN_FFMPEG` → PATH → 平台常见路径 |
+| video-watch-plus | 插件自带 `vendor/video-watch-plus`（`VW_DIR` 可覆盖） |
+| 模型缓存 | `HF_HOME` → 默认 `~/.dsh/douyin-duty/hf-cache`；默认走 hf-mirror |
 
-Windows 上只需装两样东西（一次性）：
+只需装两样（一次性）：
 
 ```powershell
-# 1) ffmpeg（含 ffprobe，完整构建）：winget install ffmpeg  或从 gyan.dev 下载
-# 2) python venv + faster-whisper
-python -m venv .venv-asr
-.venv-asr\Scripts\pip install faster-whisper numpy pillow "av<19"
-# 然后把 VW_PYTHON 指到 .venv-asr\Scripts\python.exe
+# Windows
+winget install ffmpeg
+python -m venv $env:USERPROFILE\.dsh\douyin-duty\venv
+$env:USERPROFILE\.dsh\douyin-duty\venv\Scripts\pip install faster-whisper numpy pillow "av<19"
 ```
 
-首次转写会自动从 hf-mirror 下载模型（约 460MB，small），之后不再下载。
+```bash
+# macOS / Linux
+brew install ffmpeg
+python3 -m venv ~/.dsh/douyin-duty/venv
+~/.dsh/douyin-duty/venv/bin/pip install faster-whisper numpy pillow "av<19"
+```
 
-视频理解的两条链（**由模型根据你 @ 时说的话判断**，不用代码正则）：
+首次转写会自动下载模型（small 约 460MB），之后不再下载。
+
+视频理解的两条链（**由模型根据你 @ 时说的话判断**）：
 
 ```text
 @ 视频 → api.detail 判「视频/图文」（接口字段，代码做）
@@ -74,6 +81,8 @@ python -m venv .venv-asr
   └─ 视频 + mode=watch       → 全量：结构 + 声学 + 转写 + 4×4 拼图
 @ 图文 → 取图地址 → 交给视觉模型
 ```
+
+> ⚠️ 抖音 CDN 会拒 ffmpeg 默认 UA（403），所以先带浏览器 UA + Referer 把 play_url 下载到本地，再处理。
 
 ## @ 提示词速查
 
